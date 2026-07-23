@@ -1,7 +1,7 @@
 Started validating: D:\a\lumina-visualizer\lumina-visualizer\build\Lumina_artefacts\Release\VST3\Lumina.vst3
-Random seed: 0x166d38b
+Random seed: 0x76d4ba5
 Validation started
-	23 Jul 2026 3:38:23pm
+	23 Jul 2026 3:45:10pm
 
 Strictness level: 10
 -----------------------------------------------------------------
@@ -58,7 +58,7 @@ Testing with sample rate [96000] and block size [256]
 Testing with sample rate [96000] and block size [512]
 Testing with sample rate [96000] and block size [1024]
 
-Time taken to run test: 5 ms
+Time taken to run test: 7 ms
 Completed tests in pluginval / Audio processing
 -----------------------------------------------------------------
 Starting tests in: pluginval / Non-releasing audio processing...
@@ -108,7 +108,7 @@ Testing with sample rate [96000] and block size [256] and sub-block size [32]
 Testing with sample rate [96000] and block size [512] and sub-block size [32]
 Testing with sample rate [96000] and block size [1024] and sub-block size [32]
 
-Time taken to run test: 4 ms
+Time taken to run test: 5 ms
 Completed tests in pluginval / Automation
 -----------------------------------------------------------------
 Starting tests in: pluginval / Automatable Parameters...
@@ -161,13 +161,13 @@ Starting tests in: pluginval / Restoring default layout...
 Main bus num input channels: 2
 Main bus num output channels: 2
 
-Time taken to run test: 6 ms
+Time taken to run test: 10 ms
 Completed tests in pluginval / Restoring default layout
 -----------------------------------------------------------------
 Starting tests in: pluginval / Fuzz parameters...
 
-Time taken to run test: 1 ms
+Time taken to run test: 0
 
-Time taken to run all tests: 494 ms
+Time taken to run all tests: 500 ms
 Completed tests in pluginval / Fuzz parameters
 SUCCESS
