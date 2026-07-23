@@ -1,0 +1,5 @@
+build/
+dist/
+ui/dist/
+.vs/
+*.user
