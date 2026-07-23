@@ -85,24 +85,58 @@
       { k: 'bloomThr', n: 'Threshold', min: 0.2, max: 0.9 },
       { k: 'bloomRad', n: 'Radius', min: 0.5, max: 3 }
     ]},
-    { group: 'Lens & Texture', items: [
+    { group: 'Lens & Distort', items: [
       { k: 'ca', n: 'Chromatic Aberration', min: 0, max: 1 },
-      { k: 'vig', n: 'Vignette', min: 0, max: 1 },
-      { k: 'grain', n: 'Film Grain', min: 0, max: 1 },
+      { k: 'lens', n: 'Fisheye ↔ Pinch', min: -1, max: 1 },
+      { k: 'warp', n: 'Wave Warp', min: 0, max: 1 },
+      { k: 'warpReact', n: 'Warp Audio React', min: 0, max: 1 },
+      { k: 'vig', n: 'Vignette', min: 0, max: 1 }
+    ]},
+    { group: 'Grunge & Noise', items: [
+      { k: 'grain', n: 'Grain Amount', min: 0, max: 1 },
+      { k: 'grainSize', n: 'Grain Size', min: 1, max: 4 },
+      { k: 'grainType', n: 'Grain Type', type: 'select', opts: ['Fine Mono', 'Color RGB', 'TV Static'], vals: [0, 1, 2] },
+      { k: 'grainReact', n: 'Grain Audio React', min: 0, max: 1 },
+      { k: 'dirt', n: 'Film Dirt', min: 0, max: 1 }
+    ]},
+    { group: 'Glitch & Analog', items: [
+      { k: 'glitch', n: 'Block Glitch', min: 0, max: 1 },
+      { k: 'glitchBeat', n: 'Glitch On Beats Only', type: 'toggle' },
+      { k: 'vhs', n: 'VHS Tracking', min: 0, max: 1 },
+      { k: 'vhsJit', n: 'VHS Line Jitter', min: 0, max: 1 },
       { k: 'scan', n: 'Scanlines', min: 0, max: 1 },
-      { k: 'pixel', n: 'Pixelate (0 = off)', min: 0, max: 220, step: 1 }
+      { k: 'pixel', n: 'Pixelate (0 = off)', min: 0, max: 220, step: 1 },
+      { k: 'poster', n: 'Posterize (0 = off)', min: 0, max: 24, step: 1 },
+      { k: 'dither', n: 'Dither', min: 0, max: 1 }
     ]},
     { group: 'Symmetry', items: [
       { k: 'kaleido', n: 'Kaleidoscope', type: 'select', opts: ['Off', '3', '4', '5', '6', '8', '10', '12', '16'], vals: [0, 3, 4, 5, 6, 8, 10, 12, 16] },
       { k: 'mirror', n: 'Mirror', type: 'select', opts: ['Off', 'Mirror X', 'Mirror Y', 'Quad'], vals: [0, 1, 2, 3] }
     ]},
     { group: 'Color Grade', items: [
-      { k: 'hueSpeed', n: 'Hue Rotate (°/s)', min: -120, max: 120 },
-      { k: 'satur', n: 'Saturation', min: 0, max: 2 },
+      { k: 'exposure', n: 'Exposure (EV)', min: -2, max: 2 },
+      { k: 'expo', n: 'Brightness', min: 0.6, max: 2.6 },
       { k: 'contrast', n: 'Contrast', min: 0.6, max: 1.6 },
-      { k: 'gamma', n: 'Gamma', min: 0.6, max: 1.6 },
-      { k: 'expo', n: 'Brightness', min: 0.6, max: 2.6 }
+      { k: 'satur', n: 'Saturation', min: 0, max: 2 },
+      { k: 'temp', n: 'Temperature', min: -1, max: 1 },
+      { k: 'tint', n: 'Tint', min: -1, max: 1 },
+      { k: 'hueSpeed', n: 'Hue Rotate (°/s)', min: -120, max: 120 },
+      { k: 'gamma', n: 'Gamma', min: 0.6, max: 1.6 }
+    ]},
+    { group: 'Curves', items: [
+      { k: 'curveB', n: 'Blacks (lift)', min: -0.3, max: 0.3 },
+      { k: 'curveS', n: 'Shadows', min: -1, max: 1 },
+      { k: 'curveH', n: 'Highlights', min: -1, max: 1 },
+      { k: 'curveW', n: 'Whites (gain)', min: -0.4, max: 0.4 },
+      { k: 'sCurve', n: 'S-Curve', min: 0, max: 1 }
     ]}
+  ];
+
+  const AUD_REACT_DEFS = [
+    { k: 'react', n: 'Reaction Amount', min: 0, max: 2 },
+    { k: 'floor', n: 'Reaction Floor', min: 0, max: 0.5 },
+    { k: 'curve', n: 'Response Curve', min: 0.4, max: 2.5 },
+    { k: 'dyn', n: 'Dynamics (quiet ↔ loud)', min: 0, max: 1 }
   ];
 
   const AUD_DEFS = [
@@ -218,6 +252,7 @@
         const get = () => fx[def.k];
         const set = v => { fx[def.k] = v; };
         if (def.type === 'select') ctlSelect(g, def, get, set);
+        else if (def.type === 'toggle') ctlToggle(g, def, get, set);
         else ctlSlider(g, def, get, set);
       });
     });
@@ -268,9 +303,14 @@
       const tr = el('div', 'mTrack', m);
       el('div', 'mFill', tr).id = id;
     });
-    const g = group(body, 'Response');
+    const gr0 = group(body, 'Reactivity');
+    AUD_REACT_DEFS.forEach(def => ctlSlider(gr0, def, () => aud[def.k], v => { aud[def.k] = v; }));
+    el('div', 'hint', gr0).textContent = 'Floor: level below which visuals stay calm. Curve: soft → punchy response. Dynamics: exaggerates quiet vs loud difference.';
+
+    const g = group(body, 'Input & Analysis');
     AUD_DEFS.forEach(def => ctlSlider(g, def, () => aud[def.k], v => { aud[def.k] = v; }));
     ctlToggle(g, { n: 'Auto Gain (AGC)' }, () => aud.agc ? 1 : 0, v => { aud.agc = !!v; });
+    ctlSlider(g, { n: 'Auto-Gain Strength', min: 0, max: 1 }, () => aud.agcAmt !== undefined ? aud.agcAmt : 0.75, v => { aud.agcAmt = v; });
 
     if (!LUM.bridge.plugin) {
       const gs = group(body, 'Input Source');
@@ -559,8 +599,8 @@
         '<div class="helpRow"><b>← →</b> previous / next preset</div>',
         '<div class="helpRow"><b>↑ ↓</b> previous / next scene</div>',
         '<div class="helpRow"><b>Double-click</b> canvas → focus mode</div>',
-        '<div class="hint" style="margin-top:10px">20 scenes · full FX chain · 44 factory presets. Every control is live — tweak while the music plays. The UI auto-hides when idle.</div>',
-        '<div class="hint">Lumina v1.0 — open source (AGPL-3.0)</div>'
+        '<div class="hint" style="margin-top:10px">20 scenes · full FX chain (trails, bloom, glitch, VHS, grain engine, film dirt, lens warp, curves) · 53 factory presets. Every control is live — tweak while the music plays. The UI auto-hides when idle. Reactivity controls live in the Audio tab.</div>',
+        '<div class="hint">Lumina v1.1 — open source (AGPL-3.0)</div>'
       ].join('');
       return () => null;
     }, [{ label: 'Close', primary: true }]);
