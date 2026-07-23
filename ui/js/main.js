@@ -83,6 +83,7 @@
     st.params[st.scene] = P;
     st.pal.id = LUM.palettes[Math.floor(Math.random() * LUM.palettes.length)].id;
     st.pal.cycle = Math.random() < 0.45 ? Math.random() * 0.025 : 0;
+    st.fx = Object.assign({}, LUM.DEFAULT_FX);
     const fx = st.fx;
     fx.trail = Math.pow(Math.random(), 0.8) * 0.85;
     fx.fbZoom = (Math.random() * 2 - 1) * 0.25;
@@ -92,6 +93,15 @@
     fx.kaleido = Math.random() < 0.16 ? [3, 4, 5, 6, 8][Math.floor(Math.random() * 5)] : 0;
     fx.mirror = Math.random() < 0.1 ? 1 + Math.floor(Math.random() * 3) : 0;
     fx.hueSpeed = Math.random() < 0.3 ? (Math.random() * 2 - 1) * 45 : 0;
+    /* occasional grunge sprinkle */
+    if (Math.random() < 0.18) { fx.glitch = 0.3 + Math.random() * 0.55; fx.glitchBeat = Math.random() < 0.7 ? 1 : 0; }
+    if (Math.random() < 0.14) { fx.vhs = 0.25 + Math.random() * 0.5; fx.vhsJit = Math.random() * 0.5; }
+    if (Math.random() < 0.16) fx.dirt = 0.3 + Math.random() * 0.5;
+    if (Math.random() < 0.2) { fx.grainType = Math.floor(Math.random() * 3); fx.grain = 0.25 + Math.random() * 0.5; fx.grainReact = Math.random() < 0.5 ? Math.random() : 0; }
+    if (Math.random() < 0.15) fx.lens = (Math.random() * 2 - 1) * 0.5;
+    if (Math.random() < 0.12) { fx.warp = Math.random() * 0.5; fx.warpReact = Math.random(); }
+    if (Math.random() < 0.25) fx.sCurve = Math.random() * 0.4;
+    if (Math.random() < 0.2) { fx.temp = (Math.random() * 2 - 1) * 0.4; }
     st.presetName = 'Random ✦';
     fadeKick();
     LUM.persist();
@@ -192,7 +202,7 @@
     qaTimer += dt;
     if (qaTimer < 0.5) return;
     qaTimer = 0;
-    qaHud.textContent = 'v9 scene:' + LUM.state.scene +
+    qaHud.textContent = 'v11 scene:' + LUM.state.scene +
       ' fps:' + Math.round(fpsAvg) +
       ' err:' + LUM.shaderErrors.length +
       ' beat:' + LUM.audio.beatCount +
@@ -213,9 +223,9 @@
 
     resizeCheck();
     LUM.audio.update(dt);
-    LUM.bandTex.update(LUM.audio.sm);
+    LUM.bandTex.update(LUM.audio.view);
     LUM.waveTex.update(LUM.audio.waveRG);
-    LUM.histTex.push(LUM.audio.sm);
+    LUM.histTex.push(LUM.audio.view);
     LUM.waveHistTex.push(LUM.audio.waveRG);
 
     palCycleAcc += (st.pal.cycle || 0) * dt;
