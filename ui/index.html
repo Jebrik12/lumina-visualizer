@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lumina Visualizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="glcanvas"></canvas>
+  <div id="chrome">
+    <header id="topbar"></header>
+    <aside id="scenePanel" class="panel"></aside>
+    <aside id="ctrlPanel" class="panel"></aside>
+  </div>
+  <div id="toastWrap"></div>
+  <div id="modalWrap" class="hidden"></div>
+  <div id="fatal" class="hidden">
+    <div class="fatalCard">
+      <h2>Renderer unavailable</h2>
+      <p id="fatalMsg"></p>
+    </div>
+  </div>
+</div>
+<script src="js/palettes.js"></script>
+<script src="js/gl.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/post.js"></script>
+<script src="js/scenes_spectrum.js"></script>
+<script src="js/scenes_waves.js"></script>
+<script src="js/scenes_fractal.js"></script>
+<script src="js/scenes_motion.js"></script>
+<script src="js/scenes_texture.js"></script>
+<script src="js/presets.js"></script>
+<script src="js/bridge.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
