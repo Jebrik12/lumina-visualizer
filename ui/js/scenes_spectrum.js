@@ -56,7 +56,7 @@
         if (i < n) {
           const x = (i + 0.5) / n * 95;
           const i0 = Math.min(94, Math.floor(x)), fr = x - i0;
-          v = A.sm[i0] * (1 - fr) + A.sm[i0 + 1] * fr;
+          v = A.view[i0] * (1 - fr) + A.view[i0 + 1] * fr;
           v = v * 0.94 + 0.015;
         }
         let pk = this.peaks[i] - dt * (0.25 + this.peaks[i] * 0.35);
