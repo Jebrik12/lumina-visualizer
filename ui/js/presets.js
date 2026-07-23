@@ -8,9 +8,21 @@
     bloom: 0.55, bloomThr: 0.55, bloomRad: 1.2,
     ca: 0.12, grain: 0.22, vig: 0.34, scan: 0, pixel: 0,
     kaleido: 0, mirror: 0,
-    hueSpeed: 0, satur: 1.05, contrast: 1.05, gamma: 1.0, expo: 1.5
+    hueSpeed: 0, satur: 1.05, contrast: 1.05, gamma: 1.0, expo: 1.5,
+    /* v1.1 — grunge / glitch / analog */
+    grainSize: 1, grainType: 0, grainReact: 0, dirt: 0,
+    poster: 0, dither: 0.5,
+    glitch: 0, glitchBeat: 1, vhs: 0, vhsJit: 0,
+    lens: 0, warp: 0, warpReact: 0.5,
+    /* v1.1 — grade */
+    exposure: 0, temp: 0, tint: 0,
+    curveB: 0, curveS: 0, curveH: 0, curveW: 0, sCurve: 0
   };
-  LUM.DEFAULT_AUD = { sens: 0, attack: 10, release: 260, tilt: 3, agc: true, beat: 0.5, gate: 0.04 };
+  LUM.DEFAULT_AUD = {
+    sens: 0, attack: 10, release: 260, tilt: 3,
+    agc: true, agcAmt: 0.75, beat: 0.5, gate: 0.04,
+    react: 1, floor: 0, curve: 1, dyn: 0
+  };
   LUM.DEFAULT_UI = { quality: 'auto', autohide: true, showFps: true, shuffle: false, shuffleBeats: 32 };
 
   /* Each preset: name, scene, p (scene params), fx (partial), pal {id, shift?, cycle?, custom?} */
@@ -72,6 +84,14 @@
     { name: 'Kaleido Dreams', scene: 'ink', pal: { id: 'candy', cycle: 0.02 }, p: { decay: 0.985, swirl: 2.4, scale: 2.8, inject: 1.4, bassWarp: 0.8 }, fx: { trail: 0.3, kaleido: 8, fbRot: 0.08, bloom: 0.85, ca: 0.2 } },
     { name: 'Strobe Temple', scene: 'temple', pal: { id: 'cyber' }, p: { type: 0, detail: 0.5, camSpd: 0.16, pulse: 1.0, fog: 0.6, glow: 0.8 }, fx: { trail: 0.45, fbZoom: 0.12, bloom: 0.95, ca: 0.35, mirror: 0 } },
     { name: 'Vinyl Scope', scene: 'scope', pal: { id: 'gold' }, p: { mode: 2, gain: 1.1, width: 0.02, ghosts: 3, hueDrift: 0.1, spin: -0.3 }, fx: { trail: 0.75, fbRot: -0.15, bloom: 0.6, grain: 0.6, vig: 0.65, scan: 0.3 } },
-    { name: 'Pixel Storm', scene: 'particles', pal: { id: 'cyber', cycle: 0.02 }, p: { density: 1, flowScale: 3.0, speed: 3.0, burst: 0.9, attract: 0.45, size: 4, colMode: 1 }, fx: { trail: 0.55, bloom: 0.6, pixel: 110, scan: 0.3, ca: 0.1 } }
+    { name: 'Pixel Storm', scene: 'particles', pal: { id: 'cyber', cycle: 0.02 }, p: { density: 1, flowScale: 3.0, speed: 3.0, burst: 0.9, attract: 0.45, size: 4, colMode: 1 }, fx: { trail: 0.55, bloom: 0.6, pixel: 110, scan: 0.3, ca: 0.1 } },
+
+    /* --- v1.1 Grunge & Analog showcase --- */
+    { name: 'Dirty VHS', scene: 'retro', pal: { id: 'sunset', cycle: 0.004 }, p: { grid: 7, speed: 0.5, sun: 0.19, mtn: 0.55, glow: 0.7, stars: 0.5 }, fx: { vhs: 0.7, vhsJit: 0.55, grain: 0.5, grainType: 2, grainReact: 0.35, ca: 0.3, temp: 0.28, scan: 0.3, curveB: 0.06, sCurve: 0.25, trail: 0.15, bloom: 0.55, vig: 0.45 } },
+    { name: 'Broken Signal', scene: 'waterfall', pal: { id: 'cyber' }, p: { polar: 0, span: 0.85, contrast: 0.45, colMode: 1, rotate: 0, flip: 0 }, fx: { glitch: 0.85, glitchBeat: 1, poster: 6, dither: 1, grainType: 2, grain: 0.5, grainReact: 0.5, ca: 0.2, contrast: 1.15, exposure: 0.45, bloom: 0.6, trail: 0, scan: 0.25 } },
+    { name: 'Overdriven', scene: 'bars', pal: { id: 'ember' }, p: { count: 48, gap: 0.25, layout: 2, caps: 0.7, glow: 0.8, segs: 0, colorMode: 0 }, fx: { grainReact: 1, grain: 0.65, grainSize: 1.4, exposure: 0.5, sCurve: 0.5, bloom: 1.05, ca: 0.28, vig: 0.4, trail: 0.35, fbZoom: 0.12 }, aud: { react: 1.4, curve: 1.35, dyn: 0.5 } },
+    { name: 'Film Noir', scene: 'scope', pal: { id: 'mono' }, p: { mode: 2, gain: 1.1, width: 0.016, ghosts: 2, hueDrift: 0.05, spin: -0.2 }, fx: { dirt: 0.8, grain: 0.55, grainSize: 2, satur: 0.2, vig: 0.7, sCurve: 0.35, curveB: -0.1, contrast: 1.15, bloom: 0.45, scan: 0.15, trail: 0.6, fbRot: -0.08 } },
+    { name: 'Grunge Temple', scene: 'temple', pal: { id: 'toxic' }, p: { type: 0, detail: 0.6, camSpd: 0.1, pulse: 0.7, fog: 0.8, glow: 0.6 }, fx: { dirt: 0.5, glitch: 0.35, glitchBeat: 1, grain: 0.5, grainType: 1, curveS: -0.35, curveH: 0.3, vig: 0.55, bloom: 0.7, trail: 0.25, ca: 0.18 } },
+    { name: 'Analog Dreams', scene: 'ink', pal: { id: 'candy', cycle: 0.008 }, p: { decay: 0.988, swirl: 1.9, scale: 2.0, inject: 1.1, bassWarp: 0.6 }, fx: { vhs: 0.4, vhsJit: 0.25, warp: 0.35, warpReact: 0.7, temp: -0.22, grain: 0.38, grainSize: 1.6, trail: 0.15, bloom: 0.8, sCurve: 0.2, exposure: 0.15 } }
   ];
 })();
