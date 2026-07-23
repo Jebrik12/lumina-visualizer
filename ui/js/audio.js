@@ -27,7 +27,8 @@
   const A = LUM.audio = {
     raw: new Float32Array(NB),      // post gain/tilt, pre-smooth
     prevRaw: new Float32Array(NB),
-    sm: new Float32Array(NB),       // smoothed bands 0..1
+    sm: new Float32Array(NB),       // smoothed bands 0..1 (raw response)
+    view: new Float32Array(NB),     // shaped bands (what scenes see)
     wl: new Float32Array(NW),
     wr: new Float32Array(NW),
     waveRG: new Float32Array(NW * 2),
@@ -36,23 +37,27 @@
     beatPulse: 0, beatPhase: 0, bpm: 120, beatCount: 0,
     _agcEnv: 0.25, _sinceBeat: 9, _lastBeats: [],
     _fluxHist: new Float32Array(90), _fluxIdx: 0, _fluxN: 0,
+    _dynEnv: 0.2,
+    _bassR: 0, _midR: 0, _trebR: 0, _energyR: 0,
 
     update(dt) {
       const src = LUM.source;
       if (src && src.step) src.step(dt);
       const f = (src && src.frame) || null;
-      const aud = (LUM.state && LUM.state.aud) || { sens: 0, attack: 10, release: 260, tilt: 3, agc: true, beat: 0.5, gate: 0.04 };
+      const aud = (LUM.state && LUM.state.aud) || { sens: 0, attack: 10, release: 260, tilt: 3, agc: true, agcAmt: 0.75, beat: 0.5, gate: 0.04, react: 1, floor: 0, curve: 1, dyn: 0 };
 
       if (f) {
         this.rms = f.rms; this.peak = f.peak; this.l = f.l; this.r = f.r;
         this.wl.set(f.wl); this.wr.set(f.wr);
       }
 
-      /* AGC on rms envelope */
+      /* AGC on rms envelope — strength adjustable so quiet/loud difference can survive */
       const pk = Math.max(this.rms, 0.001);
       this._agcEnv = Math.max(this._agcEnv * Math.exp(-dt / 5), pk);
       this._agcEnv = Math.max(this._agcEnv, 0.04);
-      const agcGain = aud.agc ? Math.min(6, 0.32 / this._agcEnv) : 1;
+      const agcAmt = aud.agc ? (aud.agcAmt !== undefined ? aud.agcAmt : 0.75) : 0;
+      const agcGainFull = Math.min(6, 0.32 / this._agcEnv);
+      const agcGain = (1 - agcAmt) + agcGainFull * agcAmt;
       const gain = agcGain * Math.pow(10, (aud.sens || 0) / 20);
 
       /* raw bands: gain, tilt, gate */
@@ -95,11 +100,31 @@
       for (let i = 64; i < NB; i++) tr += this.sm[i];
       b /= 27; m /= 37; tr /= 32;
       const eC = 1 - Math.exp(-dt / 0.09);
-      this.bass += eC * (Math.min(1, b * 3.2) - this.bass);
-      this.mid += eC * (Math.min(1, m * 2.2) - this.mid);
-      this.treb += eC * (Math.min(1, tr * 1.5) - this.treb);
+      this._bassR += eC * (Math.min(1, b * 3.2) - this._bassR);
+      this._midR += eC * (Math.min(1, m * 2.2) - this._midR);
+      this._trebR += eC * (Math.min(1, tr * 1.5) - this._trebR);
       const eTarget = Math.min(1, this.rms * gain * 2.2);
-      this.energy += (1 - Math.exp(-dt / 0.18)) * (eTarget - this.energy);
+      this._energyR += (1 - Math.exp(-dt / 0.18)) * (eTarget - this._energyR);
+
+      /* ---- reactivity shaping: floor / curve / amount / dynamics ---- */
+      const react = aud.react !== undefined ? aud.react : 1;
+      const floorV = Math.min(0.6, aud.floor || 0);
+      const curveV = aud.curve !== undefined ? aud.curve : 1;
+      const dyn = aud.dyn || 0;
+      this._dynEnv += (1 - Math.exp(-dt / 0.45)) * (this._energyR - this._dynEnv);
+      const dynGain = dyn > 0 ? Math.pow(Math.min(1, this._dynEnv / 0.3), dyn * 2.2) : 1;
+      const den = 1 / Math.max(0.05, 1 - floorV);
+      const shape = v => {
+        v = (v - floorV) * den;
+        if (v <= 0) return 0;
+        v = Math.pow(v, curveV) * react * dynGain;
+        return v > 1 ? 1 : v;
+      };
+      for (let i = 0; i < NB; i++) this.view[i] = shape(this.sm[i]);
+      this.bass = shape(this._bassR);
+      this.mid = shape(this._midR);
+      this.treb = shape(this._trebR);
+      this.energy = shape(this._energyR);
 
       /* beat detection: spectral flux + adaptive threshold */
       const H = this._fluxHist;
@@ -115,7 +140,7 @@
       const sensK = 2.1 - 1.7 * (aud.beat !== undefined ? aud.beat : 0.5); // 0..1 → 2.1..0.4
       const thr = Math.max(mean + sensK * std, mean * 1.45) + 0.004;
       this._sinceBeat += dt;
-      if (fluxNow > thr && this._sinceBeat > 0.15 && this.energy > 0.03 && this._fluxN > 30) {
+      if (fluxNow > thr && this._sinceBeat > 0.15 && this._energyR > 0.03 && this._fluxN > 30) {
         const now = LUM.frame.t;
         const lb = this._lastBeats;
         if (lb.length) {
