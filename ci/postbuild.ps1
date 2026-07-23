@@ -1,5 +1,6 @@
 # Lumina CI post-build: validate with pluginval, publish log back to repo, package zip.
 $ErrorActionPreference = "Continue"
+$triggerMsg = git log -1 --pretty=%B | Out-String
 
 Write-Output "== Downloading pluginval =="
 Invoke-WebRequest -Uri "https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip" -OutFile pluginval.zip
@@ -37,8 +38,7 @@ Write-Output "packaged Lumina-Windows.zip"
 
 # Publish a GitHub Release when the commit message contains [publish].
 # Tag: v<VERSION file>.<run number>  (e.g. v1.1.7)
-$msg = git log -1 --pretty=%B
-if ($msg -match '\[publish\]') {
+if ($triggerMsg -match '\[publish\]') {
     Write-Output "== Publishing GitHub Release =="
     $ver = (Get-Content VERSION -Raw).Trim()
     $tag = "v$ver.$env:GITHUB_RUN_NUMBER"
