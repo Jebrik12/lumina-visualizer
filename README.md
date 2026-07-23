@@ -22,8 +22,16 @@ auto-hiding, resizable UI.
   kaleidoscope (3–16 fold), mirror modes, hue rotate, saturation/contrast/gamma/brightness.
 - **14 curated palettes + custom 2-color palettes**, palette shift & auto-cycle.
 - **Audio engine**: 2048-pt FFT → 96 log bands, attack/release smoothing, spectral tilt,
-  auto-gain (AGC), noise gate, **beat detection with BPM estimate** — everything reacts musically.
-- **47 factory presets**, user presets (stored globally, shared across projects),
+  adjustable auto-gain, noise gate, **beat detection with BPM estimate** — everything reacts musically.
+- **Reactivity controls (v1.1)**: Reaction Amount, Reaction Floor (visuals stay calm below it),
+  Response Curve (soft → punchy) and Dynamics — dial exactly how hard the visuals ride the music,
+  fixing the "reacts too little / maxed all the time" problem.
+- **Grunge & analog FX (v1.1)**: grain engine (size, mono/RGB/TV-static types, audio-reactive amount),
+  film dirt, block glitch (beat-synced), VHS tracking + line jitter, lens fisheye/pinch, wavy warp,
+  posterize + dither.
+- **Pro color tools (v1.1)**: Exposure (EV), Temperature/Tint, parametric curves
+  (blacks/shadows/highlights/whites + S-curve).
+- **53 factory presets**, user presets (stored globally, shared across projects),
   preset import/export as files or clipboard JSON.
 - **Randomizer** (R), **shuffle mode** (auto-morphs the look every 32 beats),
   **focus mode** (F — pure visuals, UI hidden), auto-hiding UI, resizable window.
