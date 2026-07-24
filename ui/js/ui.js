@@ -6,6 +6,7 @@
   const ui = LUM.ui = LUM.ui || {};
   ui.userPresets = [];
   ui.userFxPresets = [];
+  ui.userAudPresets = [];
   ui.userThemes = [];
   ui.activeTab = 'scene';
 
@@ -138,6 +139,37 @@
     t.appendChild(document.createTextNode(title));
     if (action) t.appendChild(action);
     return g;
+  }
+
+  function groupActions() {
+    const box = document.createElement('span');
+    box.style.display = 'inline-flex';
+    box.style.gap = '4px';
+    return box;
+  }
+
+  function lockBtnFor(key, tip) {
+    const st = LUM.state;
+    const locked = () => !!st.locks[key];
+    const b = document.createElement('button');
+    b.className = 'iconBtn' + (locked() ? ' activeBtn' : '');
+    b.innerHTML = LUM.icon(locked() ? 'lock' : 'unlock');
+    b.title = (locked() ? 'Locked — ' : 'Unlocked — ') + tip;
+    b.addEventListener('click', () => {
+      st.locks[key] = !st.locks[key];
+      LUM.persist(); ui.refresh();
+      ui.toast((st.locks[key] ? 'Locked: ' : 'Unlocked: ') + key);
+    });
+    return b;
+  }
+
+  function diceBtnFor(cat, tip) {
+    const b = document.createElement('button');
+    b.className = 'iconBtn';
+    b.innerHTML = LUM.icon('dice');
+    b.title = tip;
+    b.addEventListener('click', () => LUM.randCategory(cat));
+    return b;
   }
 
   function iconBtn(parent, icon, title, cb, id) {
@@ -288,17 +320,51 @@
       const src = el('div', 'srcLabel', tb); src.id = 'srcLabel';
     }
     const fps = el('div', 'fps', tb); fps.id = 'fps';
-    iconBtn(tb, 'dice', 'Randomize look (R) — Shift-click: random scene too', e => LUM.randomize(e.shiftKey), 'btnDice');
+    iconBtn(tb, 'undo', 'Undo (Ctrl+Z)', () => LUM.undo());
+    iconBtn(tb, 'redo', 'Redo (Ctrl+Y)', () => LUM.redo());
+    iconBtn(tb, 'dice', 'Randomize everything unlocked (R)', () => LUM.randomizeAll(), 'btnDice');
     iconBtn(tb, 'shuffle', 'Shuffle presets on beat (S)', toggleShuffle, 'btnShuffle');
     iconBtn(tb, 'maximize', 'Fullscreen (F)', () => LUM.toggleFullscreen(), 'btnFs');
     iconBtn(tb, 'help', 'Help & shortcuts (H)', helpModal);
-    const xb = iconBtn(tb, 'x', 'Exit fullscreen (Esc)', () => LUM.exitFullscreen(), 'btnExitFs');
+    const xb = iconBtn(tb, 'x', 'Close window / exit fullscreen', () => {
+      if (LUM.isFullscreen && LUM.isFullscreen()) LUM.exitFullscreen();
+      else LUM.emit('closeWindow', {});
+    }, 'btnExitFs');
     xb.style.display = 'none';
+    ui.updateCloseBtn();
+
+    /* drag empty topbar space to move the (borderless) plugin window */
+    if (LUM.bridge.plugin) {
+      let dragging = false, lx = 0, ly = 0;
+      tb.addEventListener('pointerdown', e => {
+        if (e.button !== 0) return;
+        const t = e.target;
+        if (t !== tb && !t.classList.contains('logo') && !t.classList.contains('spacer') && !t.classList.contains('fps')) return;
+        dragging = true; lx = e.screenX; ly = e.screenY;
+        tb.setPointerCapture(e.pointerId);
+      });
+      tb.addEventListener('pointermove', e => {
+        if (!dragging) return;
+        const dx = e.screenX - lx, dy = e.screenY - ly;
+        if (dx !== 0 || dy !== 0) { LUM.emit('dragWindow', { dx, dy }); lx = e.screenX; ly = e.screenY; }
+      });
+      const endDrag = () => { dragging = false; };
+      tb.addEventListener('pointerup', endDrag);
+      tb.addEventListener('pointercancel', endDrag);
+    }
   }
 
-  ui.setFullscreenUi = function (on) {
+  ui.updateCloseBtn = function () {
     const xb = $('#btnExitFs');
-    if (xb) xb.style.display = on ? '' : 'none';
+    if (!xb) return;
+    const fs = LUM.isFullscreen && LUM.isFullscreen();
+    const show = fs || (LUM.bridge.plugin && LUM.state && LUM.state.ui.hideHostBar);
+    xb.style.display = show ? '' : 'none';
+    xb.title = fs ? 'Exit fullscreen (Esc)' : 'Close plugin window';
+  };
+
+  ui.setFullscreenUi = function (on) {
+    ui.updateCloseBtn();
     const fsb = $('#btnFs');
     if (fsb) fsb.classList.toggle('activeBtn', !!on);
   };
@@ -339,7 +405,10 @@
     const L = st.layout;
 
     /* layout */
-    const gl = group(body, 'Layout');
+    const glActs = groupActions();
+    glActs.appendChild(diceBtnFor('layout', 'Randomize layout & pane scenes'));
+    glActs.appendChild(lockBtnFor('layout', 'layout is protected from randomize'));
+    const gl = group(body, 'Layout', glActs);
     const lr = el('div', 'layoutRow', gl);
     LUM.layoutModes.forEach(m => {
       const b = el('button', 'layoutBtn' + (L.mode === m.id ? ' active' : ''), lr);
@@ -372,9 +441,15 @@
     const P = LUM.paramsOf(sc.id);
     const head = el('div', 'sceneHead', body);
     el('div', 'sceneName', head).textContent = sc.name + (nPanes > 1 ? '  ·  pane ' + (L.active + 1) : '');
-    const rnd = el('button', 'miniBtn', head);
-    rnd.innerHTML = LUM.icon('dice') + 'randomize';
-    rnd.addEventListener('click', () => LUM.randomize(false));
+    const headActs = groupActions();
+    const rnd = document.createElement('button');
+    rnd.className = 'iconBtn';
+    rnd.innerHTML = LUM.icon('dice');
+    rnd.title = 'Randomize this scene\u2019s parameters only';
+    rnd.addEventListener('click', () => LUM.randCategory('scene'));
+    headActs.appendChild(rnd);
+    headActs.appendChild(lockBtnFor('scene', 'scenes & their parameters are protected from randomize'));
+    head.appendChild(headActs);
     if (!sc.params.length) { el('div', 'hint', body).textContent = 'This scene has no extra parameters.'; return; }
     sc.params.forEach(def => {
       const get = () => P[def.k];
@@ -398,7 +473,10 @@
       LUM.persist(); ui.refresh();
       ui.toast(st.fxLock ? 'FX locked — presets won’t change it' : 'FX unlocked');
     });
-    const g = group(body, 'FX Preset', lockBtn);
+    const acts = groupActions();
+    acts.appendChild(diceBtnFor('fx', 'Randomize FX chain'));
+    acts.appendChild(lockBtn);
+    const g = group(body, 'FX Preset', acts);
     const row = el('div', 'btnRow', g);
     const sel = el('select', 'ctlSel', row);
     sel.style.flex = '1';
@@ -511,7 +589,10 @@
 
   function renderColorTab(body) {
     const pal = LUM.state.pal;
-    const g = group(body, 'Palette');
+    const cActs = groupActions();
+    cActs.appendChild(diceBtnFor('color', 'Randomize palette'));
+    cActs.appendChild(lockBtnFor('color', 'palette is protected from randomize'));
+    const g = group(body, 'Palette', cActs);
     const grid = el('div', 'swGrid', g);
     LUM.palettes.forEach(p => {
       const b = el('button', 'sw' + (pal.id === p.id ? ' active' : ''), grid);
@@ -537,8 +618,65 @@
     ctlSlider(gm, { n: 'Palette Cycle (/s)', min: 0, max: 0.08 }, () => pal.cycle || 0, v => { pal.cycle = v; }, 0);
   }
 
+  function audPresetRow(body) {
+    const st = LUM.state;
+    const g = group(body, 'Audio Preset');
+    const row = el('div', 'btnRow', g);
+    const sel = el('select', 'ctlSel', row);
+    sel.style.flex = '1';
+    const og1 = el('optgroup', '', sel); og1.label = 'Factory';
+    LUM.factoryAudPresets.forEach((p, i) => { const o = el('option', '', og1); o.value = 'f:' + i; o.textContent = p.name; });
+    if (ui.userAudPresets.length) {
+      const og2 = el('optgroup', '', sel); og2.label = 'User';
+      ui.userAudPresets.forEach((p, i) => { const o = el('option', '', og2); o.value = 'u:' + i; o.textContent = p.name; });
+    }
+    const cur = el('option', '', sel); cur.value = 'x'; cur.textContent = '\u2014 current \u2014';
+    sel.value = 'x';
+    sel.addEventListener('change', () => {
+      const v = sel.value;
+      let p = null;
+      if (v.startsWith('f:')) p = LUM.factoryAudPresets[+v.slice(2)];
+      else if (v.startsWith('u:')) p = ui.userAudPresets[+v.slice(2)];
+      if (p) {
+        st.aud = Object.assign({}, LUM.DEFAULT_AUD, JSON.parse(JSON.stringify(p.aud)));
+        LUM.persist(); ui.refresh();
+        ui.toast('Audio preset: ' + p.name);
+      }
+    });
+    const save = el('button', 'iconBtn', row);
+    save.innerHTML = LUM.icon('save'); save.title = 'Save current audio response as preset';
+    save.addEventListener('click', () => {
+      showModal('Save audio preset', b => {
+        const inp = el('input', 'txtInp', b);
+        inp.placeholder = 'Audio preset name\u2026';
+        setTimeout(() => inp.focus(), 40);
+        return () => inp.value.trim();
+      }, [
+        { label: 'Cancel' },
+        { label: 'Save', primary: true, cb: getVal => {
+          const name = getVal();
+          if (!name) return false;
+          const np = { name, aud: JSON.parse(JSON.stringify(st.aud)) };
+          const ex = ui.userAudPresets.findIndex(p => p.name === name);
+          if (ex >= 0) ui.userAudPresets[ex] = np; else ui.userAudPresets.push(np);
+          saveUserStore();
+          ui.refresh();
+          ui.toast('Audio preset saved: ' + name);
+          return true;
+        }}
+      ]);
+    });
+    const reset = el('button', 'iconBtn', row);
+    reset.innerHTML = LUM.icon('reset'); reset.title = 'Reset audio response to defaults';
+    reset.addEventListener('click', () => {
+      st.aud = Object.assign({}, LUM.DEFAULT_AUD);
+      LUM.persist(); ui.refresh();
+    });
+  }
+
   function renderAudioTab(body) {
     const aud = LUM.state.aud;
+    audPresetRow(body);
     const gm = group(body, 'Levels');
     const meters = el('div', 'meters', gm);
     [['Bass', 'mBass'], ['Mid', 'mMid'], ['Treble', 'mTreb']].forEach(([n, id]) => {
@@ -550,6 +688,12 @@
 
     const gr0 = group(body, 'Reactivity');
     AUD_REACT_DEFS.forEach(def => ctlSlider(gr0, def, () => aud[def.k], v => { aud[def.k] = v; }, LUM.DEFAULT_AUD[def.k]));
+
+    const gb = group(body, 'Band Influence');
+    [['bassG', 'Bass Influence'], ['midG', 'Mid Influence'], ['trebG', 'Treble Influence']].forEach(([k, n]) => {
+      ctlSlider(gb, { n, min: 0, max: 2 }, () => aud[k] !== undefined ? aud[k] : 1, v => { aud[k] = v; }, 1);
+    });
+    el('div', 'hint', gb).textContent = 'How strongly each band drives the visuals \u2014 boost bass for kick-heavy reaction, cut treble to calm hats.';
 
     const rstC = el('button', 'iconBtn', null);
     rstC.innerHTML = LUM.icon('reset'); rstC.title = 'Reset response curve';
@@ -617,6 +761,12 @@
     ctlToggle(ga, { n: 'Panel Blur' }, () => st.ui.blur ? 1 : 0, v => { st.ui.blur = !!v; LUM.applyTheme(); });
     ctlSlider(ga, { n: 'Panel Opacity', min: 0.5, max: 1 }, () => st.ui.panelAlpha !== undefined ? st.ui.panelAlpha : 0.92, v => { st.ui.panelAlpha = v; LUM.applyTheme(); }, 0.92);
     ctlToggle(ga, { n: 'Auto-hide UI' }, () => st.ui.autohide ? 1 : 0, v => { st.ui.autohide = !!v; });
+    if (LUM.bridge.plugin)
+      ctlToggle(ga, { n: 'Hide host title bar' }, () => st.ui.hideHostBar ? 1 : 0, v => {
+        st.ui.hideHostBar = !!v;
+        LUM.emit('setHostBar', { hide: !!v });
+        ui.updateCloseBtn();
+      });
     ctlToggle(ga, { n: 'Show FPS' }, () => st.ui.showFps ? 1 : 0, v => { st.ui.showFps = !!v; ui.refresh(); });
 
     const gq = group(body, 'Render');
@@ -871,7 +1021,7 @@
   ui.onPasteText = function (t) { ui.onImportedPreset(t); };
 
   function saveUserStore() {
-    LUM.saveUserPresets({ v: 2, presets: ui.userPresets, fxPresets: ui.userFxPresets, themes: ui.userThemes });
+    LUM.saveUserPresets({ v: 2, presets: ui.userPresets, fxPresets: ui.userFxPresets, audPresets: ui.userAudPresets, themes: ui.userThemes });
   }
 
   ui.onUserPresets = function (json) {
@@ -881,6 +1031,7 @@
       if (o) {
         if (Array.isArray(o.presets)) ui.userPresets = o.presets;
         if (Array.isArray(o.fxPresets)) ui.userFxPresets = o.fxPresets;
+        if (Array.isArray(o.audPresets)) ui.userAudPresets = o.audPresets;
         if (Array.isArray(o.themes)) ui.userThemes = o.themes;
       }
       refreshPresetSelect();
@@ -926,11 +1077,18 @@
       const tag = (e.target && e.target.tagName) || '';
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       pokeChrome();
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        if (e.shiftKey) LUM.redo(); else LUM.undo();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault(); LUM.redo(); return;
+      }
       switch (e.key) {
         case 'f': case 'F': LUM.toggleFullscreen(); break;
         case 'Escape': if (modalOpen) closeModal(); else LUM.exitFullscreen(); break;
-        case 'r': LUM.randomize(false); break;
-        case 'R': LUM.randomize(true); break;
+        case 'r': case 'R': LUM.randomizeAll(); break;
         case 's': case 'S': toggleShuffle(); break;
         case 'ArrowLeft': stepPreset(-1); break;
         case 'ArrowRight': stepPreset(1); break;
