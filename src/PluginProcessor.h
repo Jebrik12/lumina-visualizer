@@ -48,6 +48,18 @@ public:
         uiStateJson = json;
     }
 
+    juce::String getMediaPath() const
+    {
+        const juce::ScopedLock sl (stateLock);
+        return mediaPath;
+    }
+
+    void setMediaPath (const juce::String& path)
+    {
+        const juce::ScopedLock sl (stateLock);
+        mediaPath = path;
+    }
+
     static juce::File getUserPresetsFile()
     {
         return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
@@ -60,6 +72,7 @@ public:
 private:
     mutable juce::CriticalSection stateLock;
     juce::String uiStateJson;
+    juce::String mediaPath;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LuminaAudioProcessor)
 };
