@@ -1,6 +1,11 @@
 #include "PluginEditor.h"
 #include "WebAssets.h"
 
+#if JUCE_WINDOWS
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
+#endif
+
 namespace
 {
     juce::var propOr (const juce::var& v, const juce::Identifier& key, const juce::var& fallback)
@@ -37,44 +42,82 @@ LuminaAudioProcessorEditor::~LuminaAudioProcessorEditor()
 
 void LuminaAudioProcessorEditor::resized()
 {
-    if (fsShell == nullptr)
-        webView.setBounds (getLocalBounds());
-    proc.editorW = getWidth();
-    proc.editorH = getHeight();
+    webView.setBounds (getLocalBounds());
+    if (! fsActive)
+    {
+        proc.editorW = getWidth();
+        proc.editorH = getHeight();
+    }
 }
 
+/*  Fullscreen: instead of moving the WebView into another window (unreliable with
+    WebView2), we make the HOST's plugin window borderless and stretch it across the
+    monitor, resizing the editor to match. On exit everything is restored exactly. */
 void LuminaAudioProcessorEditor::setNativeFullscreen (bool shouldBeFullscreen)
 {
-    if (shouldBeFullscreen == (fsShell != nullptr))
+   #if JUCE_WINDOWS
+    if (shouldBeFullscreen == fsActive)
+        return;
+
+    auto* peer = getPeer();
+    if (peer == nullptr)
+        return;
+
+    HWND child = (HWND) peer->getNativeHandle();
+    HWND top = GetAncestor (child, GA_ROOT);
+    if (top == nullptr)
         return;
 
     if (shouldBeFullscreen)
     {
-        fsShell = std::make_unique<FullscreenShell> ([this] { setNativeFullscreen (false); });
+        fsPrevW = getWidth();
+        fsPrevH = getHeight();
+        fsPrevStyle = (juce::int64) GetWindowLongPtr (top, GWL_STYLE);
+        fsPrevExStyle = (juce::int64) GetWindowLongPtr (top, GWL_EXSTYLE);
+        RECT r {};
+        GetWindowRect (top, &r);
+        fsPrevRect[0] = r.left; fsPrevRect[1] = r.top;
+        fsPrevRect[2] = r.right - r.left; fsPrevRect[3] = r.bottom - r.top;
+
+        HMONITOR mon = MonitorFromWindow (top, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO mi {};
+        mi.cbSize = sizeof (MONITORINFO);
+        GetMonitorInfo (mon, &mi);
+        const int mw = mi.rcMonitor.right - mi.rcMonitor.left;
+        const int mh = mi.rcMonitor.bottom - mi.rcMonitor.top;
+
+        /* logical (JUCE) size of the same monitor for the editor itself */
         const auto& displays = juce::Desktop::getInstance().getDisplays();
         const auto* display = displays.getDisplayForRect (getScreenBounds());
-        if (display == nullptr)
-            display = displays.getPrimaryDisplay();
-        const auto area = display != nullptr ? display->totalArea : juce::Rectangle<int> (0, 0, 1920, 1080);
-        fsShell->setBounds (area);
-        fsShell->setAlwaysOnTop (true);
-        fsShell->addToDesktop (0);
-        fsShell->setVisible (true);
-        fsShell->addAndMakeVisible (webView);
-        fsShell->resized();
-        fsShell->toFront (true);
+        if (display == nullptr) display = displays.getPrimaryDisplay();
+        const auto logical = display != nullptr ? display->totalArea : juce::Rectangle<int> (0, 0, mw, mh);
+
+        fsActive = true;
+
+        SetWindowLongPtr (top, GWL_STYLE,
+                          (LONG_PTR) ((fsPrevStyle & ~(LONG_PTR) (WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU)) | WS_POPUP));
+        SetWindowPos (top, HWND_TOPMOST, mi.rcMonitor.left, mi.rcMonitor.top, mw, mh,
+                      SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOOWNERZORDER);
+        setSize (logical.getWidth(), logical.getHeight());
+        SetWindowPos (top, HWND_TOPMOST, mi.rcMonitor.left, mi.rcMonitor.top, mw, mh,
+                      SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOOWNERZORDER);
     }
     else
     {
-        addAndMakeVisible (webView);
-        if (fsShell != nullptr)
-            fsShell->removeFromDesktop();
-        fsShell.reset();
-        resized();
+        fsActive = false;
+
+        SetWindowLongPtr (top, GWL_STYLE, (LONG_PTR) fsPrevStyle);
+        SetWindowLongPtr (top, GWL_EXSTYLE, (LONG_PTR) fsPrevExStyle);
+        setSize (fsPrevW, fsPrevH);
+        SetWindowPos (top, HWND_NOTOPMOST, fsPrevRect[0], fsPrevRect[1], fsPrevRect[2], fsPrevRect[3],
+                      SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOOWNERZORDER);
     }
+   #else
+    juce::ignoreUnused (shouldBeFullscreen);
+   #endif
 
     auto obj = std::make_unique<juce::DynamicObject>();
-    obj->setProperty ("on", fsShell != nullptr);
+    obj->setProperty ("on", fsActive);
     webView.emitEventIfBrowserIsVisible ("fullscreenState", juce::var (obj.release()));
 }
 
