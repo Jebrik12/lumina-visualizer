@@ -68,12 +68,41 @@
   ].join('\n');
 
   const COMP_FS = PRE + [
-    'uniform sampler2D uSrc,uBloom1,uBloom2;',
+    'uniform sampler2D uSrc,uBloom1,uBloom2,uMedia,uCurveLUT;',
     'uniform float uBloomAmt,uCA,uGrain,uVig,uScan,uPixel,uKaleido,uMirror,uHue,uSatur,uContrast,uGammaAdj,uExpo,uFade,uT;',
     'uniform float uEnergyA,uBassA,uBeatA,uBeatPh;',
     'uniform float uGrainSize,uGrainType,uGrainReact,uDirt,uPoster,uDither;',
     'uniform float uGlitch,uGlitchBeat,uVhs,uVhsJit,uLens,uWarpA,uWarpReact;',
     'uniform float uExposure,uTemp,uTint,uCurveB,uCurveS,uCurveH,uCurveW,uSCurve;',
+    'uniform float uCurveOn;',
+    'uniform float uThresh,uThreshLvl,uThreshSoft,uThreshInv,uThreshKeep;',
+    'uniform float uMono;uniform vec3 uMonoTint;',
+    'uniform float uN2,uN2Scale,uN2Type,uN2Blend,uN2React;',
+    'uniform float uTexOn,uTexAmt,uTexScale,uTexBlend;',
+    'uniform float uMediaHave,uMediaOp,uMediaBlend,uMediaFit,uMediaLayer,uMediaMotion;',
+    'uniform vec2 uMediaSize;',
+    'float sat1(float x){return clamp(x,0.0,1.0);}',
+    'vec3 blendM(float m,vec3 b,vec3 t){',
+    ' if(m<1.5)return mix(2.0*b*t,1.0-2.0*(1.0-b)*(1.0-t),step(vec3(0.5),b));',
+    ' if(m<2.5)return 1.0-(1.0-b)*(1.0-t);',
+    ' if(m<3.5)return clamp(b/(1.0-t+0.001),0.0,1.0);',
+    ' if(m<4.5)return b*t;',
+    ' return (1.0-2.0*t)*b*b+2.0*t*b;',
+    '}',
+    'vec4 mediaSample(vec2 suv,float t){',
+    ' float mAsp=uMediaSize.x/max(uMediaSize.y,1.0);',
+    ' float rAsp=uRes.x/uRes.y;',
+    ' suv=0.5+(suv-0.5)*(1.0-uMediaMotion*uBeatA*0.06);',
+    ' suv+=uMediaMotion*vec2(sin(t*0.21),cos(t*0.17))*0.012;',
+    ' vec2 uv2=suv-0.5;',
+    ' vec2 sc=vec2(rAsp/max(mAsp,0.001),1.0);',
+    ' vec2 muv;float alpha=1.0;',
+    ' if(uMediaFit<0.5){muv=0.5+uv2*sc/max(sc.x,sc.y);}',
+    ' else if(uMediaFit<1.5){muv=0.5+uv2*sc/min(sc.x,sc.y);vec2 stp=step(vec2(0.0),muv)*step(muv,vec2(1.0));alpha=stp.x*stp.y;}',
+    ' else{muv=suv*sc*2.0;}',
+    ' muv.y=1.0-muv.y;',
+    ' return vec4(texture(uMedia,muv).rgb,alpha);',
+    '}',
     'void main(){',
     ' vec2 uv=gl_FragCoord.xy/uRes;',
     ' float glitchShift=0.0;',
@@ -153,6 +182,18 @@
     ' if(abs(uTemp)>0.001||abs(uTint)>0.001){',
     '  col*=vec3(1.0+uTemp*0.28-uTint*0.08,1.0+uTint*0.22,1.0-uTemp*0.28-uTint*0.08);',
     ' }',
+    ' /* user media layer */',
+    ' if(uMediaHave>0.5){',
+    '  vec4 md=mediaSample(gl_FragCoord.xy/uRes,uT);',
+    '  float mop=uMediaOp*md.a;',
+    '  if(uMediaLayer<0.5){',
+    '   if(uMediaBlend<0.5){float ma=sat1(dot(col,vec3(0.299,0.587,0.114))*1.7);col+=md.rgb*mop*(1.0-ma);}',
+    '   else col=mix(col,blendM(uMediaBlend,md.rgb,col),mop);',
+    '  }else{',
+    '   if(uMediaBlend<0.5)col=mix(col,md.rgb,mop);',
+    '   else col=mix(col,blendM(uMediaBlend,col,md.rgb),mop);',
+    '  }',
+    ' }',
     ' /* contrast */',
     ' col=(col-0.5)*uContrast+0.5;',
     ' /* parametric curves */',
@@ -165,8 +206,28 @@
     ' col*=1.0+uCurveW*0.4;',
     ' col=clamp(col,0.0,1.0);',
     ' if(uSCurve>0.001)col=mix(col,col*col*(3.0-2.0*col),uSCurve);',
+    ' /* interactive curve LUT */',
+    ' if(uCurveOn>0.5){',
+    '  col=clamp(col,0.0,1.0);',
+    '  col=vec3(texture(uCurveLUT,vec2(col.r,0.5)).r,',
+    '           texture(uCurveLUT,vec2(col.g,0.5)).r,',
+    '           texture(uCurveLUT,vec2(col.b,0.5)).r);',
+    ' }',
     ' /* gamma */',
     ' col=pow(max(col,0.0),vec3(1.0/uGammaAdj));',
+    ' /* threshold */',
+    ' if(uThresh>0.001){',
+    '  float tl=dot(col,vec3(0.2126,0.7152,0.0722));',
+    '  float tv=smoothstep(uThreshLvl-uThreshSoft-0.001,uThreshLvl+uThreshSoft+0.001,tl);',
+    '  if(uThreshInv>0.5)tv=1.0-tv;',
+    '  vec3 tc=(uThreshKeep>0.5)?col*tv:vec3(tv);',
+    '  col=mix(col,tc,uThresh);',
+    ' }',
+    ' /* monochrome */',
+    ' if(uMono>0.001){',
+    '  float ml=dot(col,vec3(0.2126,0.7152,0.0722));',
+    '  col=mix(col,uMonoTint*ml,uMono);',
+    ' }',
     ' /* scanlines + vignette */',
     ' if(uScan>0.001)col*=1.0-uScan*0.45*(0.5+0.5*sin(gl_FragCoord.y*3.14159265));',
     ' float d=length((gl_FragCoord.xy/uRes-0.5)*vec2(uAspect,1.0))/max(uAspect,1.0)*1.55;',
@@ -191,6 +252,27 @@
     '   float shade=step(0.45,phash(dc+0.31));',
     '   col=mix(col,vec3(shade),spk*min(uDirt*1.4,1.0)*0.85);',
     '  }',
+    ' }',
+    ' /* noise overlay v2 (blend modes, heavy range) */',
+    ' if(uN2>0.001){',
+    '  vec2 np=gl_FragCoord.xy/max(uN2Scale,0.5);',
+    '  float nseed=floor(uT*14.0);',
+    '  float nv;',
+    '  if(uN2Type<0.5)nv=pnoise(np*0.06+nseed*vec2(3.7,7.1))*0.7+pnoise(np*0.17+nseed*1.3)*0.3;',
+    '  else if(uN2Type<1.5)nv=phash(np+fract(uT*61.7)*vec2(371.3,441.7));',
+    '  else nv=phash(vec2(floor(gl_FragCoord.y/max(uN2Scale,0.5)),nseed*13.7));',
+    '  float namt=uN2*(1.0-uN2React+uN2React*(0.15+uEnergyA*1.2+uBeatA*0.9));',
+    '  col=mix(col,blendM(max(uN2Blend,1.0),clamp(col,0.0,1.0),vec3(nv)),sat1(namt));',
+    ' }',
+    ' /* texture overlays: paper / halftone / hatch */',
+    ' if(uTexOn>0.5){',
+    '  vec2 tp=gl_FragCoord.xy*0.5/max(uTexScale,0.25);',
+    '  float lum2=dot(clamp(col,0.0,1.0),vec3(0.299,0.587,0.114));',
+    '  float tv;',
+    '  if(uTexOn<1.5){tv=0.55+0.45*(pnoise(tp*0.35)*0.6+pnoise(tp*1.1)*0.4);}',
+    '  else if(uTexOn<2.5){vec2 cell=fract(tp*0.09)-0.5;float rad=(1.0-lum2)*0.58;tv=smoothstep(rad,rad-0.09,length(cell));}',
+    '  else{float d45=abs(fract((tp.x+tp.y)*0.07)-0.5)*2.0;float wdt=(1.0-lum2)*0.85;tv=smoothstep(wdt,wdt-0.15,d45);}',
+    '  col=mix(col,blendM(max(uTexBlend,1.0),clamp(col,0.0,1.0),vec3(tv)),uTexAmt);',
     ' }',
     ' /* grain engine */',
     ' {',
@@ -224,12 +306,31 @@
   let fbPrg, brightPrg, blurPrg, compPrg;
   let sceneRT = null, fbPP = null, halfA = null, halfB = null, quartA = null, quartB = null;
   let W = 0, H = 0;
+  let curveLutTex = null;
+
+  LUM.setCurveLUT = function (lut) {
+    const gl = LUM.gl;
+    if (!curveLutTex) {
+      curveLutTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, curveLutTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, 256, 1, 0, gl.RED, gl.FLOAT, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, curveLutTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 256, 1, gl.RED, gl.FLOAT, lut);
+  };
 
   LUM.postInit = function () {
     fbPrg = LUM.prog(LUM.FSQ_VS, FB_FS, 'post.feedback');
     brightPrg = LUM.prog(LUM.FSQ_VS, BRIGHT_FS, 'post.bright');
     blurPrg = LUM.prog(LUM.FSQ_VS, BLUR_FS, 'post.blur');
     compPrg = LUM.prog(LUM.FSQ_VS, COMP_FS, 'post.composite');
+    const idLut = new Float32Array(256);
+    for (let i = 0; i < 256; i++) idLut[i] = i / 255;
+    LUM.setCurveLUT(idLut);
   };
 
   LUM.postResize = function (w, h) {
@@ -318,7 +419,19 @@
         uLens: fx.lens, uWarpA: fx.warp, uWarpReact: fx.warpReact,
         uExposure: fx.exposure, uTemp: fx.temp, uTint: fx.tint,
         uCurveB: fx.curveB, uCurveS: fx.curveS, uCurveH: fx.curveH, uCurveW: fx.curveW,
-        uSCurve: fx.sCurve
+        uSCurve: fx.sCurve,
+        uCurveOn: fx.curveOn ? 1 : 0, uCurveLUT: curveLutTex,
+        uThresh: fx.thresh, uThreshLvl: fx.threshLvl, uThreshSoft: fx.threshSoft,
+        uThreshInv: fx.threshInv, uThreshKeep: fx.threshKeep,
+        uMono: fx.mono, uMonoTint: LUM.hex2rgb(fx.monoTint || '#ffffff'),
+        uN2: fx.noise2, uN2Scale: fx.noise2Scale, uN2Type: fx.noise2Type,
+        uN2Blend: fx.noise2Blend, uN2React: fx.noise2React,
+        uTexOn: fx.texOn, uTexAmt: fx.texAmt, uTexScale: fx.texScale, uTexBlend: fx.texBlend,
+        uMedia: LUM.media && LUM.media.ready ? LUM.media.tex() : (curveLutTex),
+        uMediaHave: LUM.media && LUM.media.ready ? 1 : 0,
+        uMediaOp: fx.mediaOp, uMediaBlend: fx.mediaBlend, uMediaFit: fx.mediaFit,
+        uMediaLayer: fx.mediaLayer, uMediaMotion: fx.mediaMotion,
+        uMediaSize: LUM.media && LUM.media.ready ? [LUM.media.w, LUM.media.h] : [2, 2]
       });
       LUM.fsq();
     }
