@@ -6,11 +6,12 @@
   /* ---------- state ---------- */
   function defaultState() {
     return {
-      v: 1, scene: 'rings', params: {},
+      v: 2, scene: 'rings', params: {},
       fx: Object.assign({}, LUM.DEFAULT_FX),
-      pal: { id: 'neon', shift: 0, cycle: 0.01, custom: { c1: '#7c5cff', c2: '#00e5ff' } },
+      pal: { id: 'neon', shift: 0, cycle: 0.01, custom: { c1: '#5b8cff', c2: '#e6e6e6' } },
       aud: Object.assign({}, LUM.DEFAULT_AUD),
       ui: Object.assign({}, LUM.DEFAULT_UI),
+      layout: JSON.parse(JSON.stringify(LUM.DEFAULT_LAYOUT)),
       presetName: 'Neon Halo'
     };
   }
@@ -29,17 +30,49 @@
     if (!s || typeof s !== 'object') return;
     const d = defaultState();
     LUM.state = {
-      v: 1,
+      v: 2,
       scene: LUM.sceneById[s.scene] ? s.scene : d.scene,
       params: (s.params && typeof s.params === 'object') ? s.params : {},
       fx: Object.assign({}, d.fx, s.fx || {}),
       pal: Object.assign({}, d.pal, s.pal || {}),
       aud: Object.assign({}, d.aud, s.aud || {}),
       ui: Object.assign({}, d.ui, s.ui || {}),
+      layout: Object.assign({}, d.layout, s.layout || {}),
       presetName: s.presetName || 'Custom'
     };
+    if (!Array.isArray(LUM.state.layout.panes) || LUM.state.layout.panes.length < 6)
+      LUM.state.layout.panes = d.layout.panes.slice();
+    LUM.state.layout.panes = LUM.state.layout.panes.map(id => LUM.sceneById[id] ? id : d.layout.panes[0]);
+    if (LUM.state.layout.mode === 'single') LUM.state.layout.panes[0] = LUM.state.scene;
+    LUM.syncCurveLUT();
+    if (LUM.applyTheme) LUM.applyTheme();
     fadeKick();
     LUM.ui.refresh();
+  };
+
+  /* rebuild the color-curve LUT from state (after preset/state loads) */
+  LUM.syncCurveLUT = function () {
+    const fx = LUM.state.fx;
+    const pts = Array.isArray(fx.curvePts) && fx.curvePts.length >= 2
+      ? fx.curvePts : [[0, 0], [1, 1]];
+    const ident = pts.every(p => Math.abs(p[1] - p[0]) < 0.004);
+    fx.curveOn = ident ? 0 : 1;
+    LUM.setCurveLUT(LUM.curveLut(pts));
+  };
+
+  /* scene assignment (layout-aware) */
+  LUM.assignScene = function (id) {
+    if (!LUM.sceneById[id]) return;
+    const st = LUM.state, L = st.layout;
+    L.panes[L.active] = id;
+    st.scene = id;
+    st.presetName = 'Custom';
+    fadeKick();
+    LUM.ui.refresh();
+  };
+  LUM.syncActiveScene = function () {
+    const st = LUM.state, L = st.layout;
+    st.scene = L.panes[Math.min(L.active, LUM.layoutModeById[L.mode].panes - 1)];
   };
 
   LUM.applyPreset = function (p) {
@@ -49,22 +82,34 @@
     const defs = {};
     LUM.sceneById[p.scene].params.forEach(d => { defs[d.k] = d.def; });
     st.params[p.scene] = Object.assign(defs, p.p || {});
-    st.fx = Object.assign({}, LUM.DEFAULT_FX, p.fx || {});
+    st.fx = Object.assign({}, LUM.DEFAULT_FX, JSON.parse(JSON.stringify(p.fx || {})));
     st.pal = Object.assign({ id: 'neon', shift: 0, cycle: 0, custom: st.pal.custom }, p.pal || {});
     if (p.aud) st.aud = Object.assign({}, st.aud, p.aud);
+    if (p.layout && LUM.layoutModeById[p.layout.mode]) {
+      st.layout = Object.assign(JSON.parse(JSON.stringify(LUM.DEFAULT_LAYOUT)), JSON.parse(JSON.stringify(p.layout)));
+      st.layout.panes = st.layout.panes.map(id => LUM.sceneById[id] ? id : p.scene);
+      if (p.paneParams) {
+        for (const sid in p.paneParams) {
+          if (!LUM.sceneById[sid]) continue;
+          const sd = {};
+          LUM.sceneById[sid].params.forEach(d => { sd[d.k] = d.def; });
+          st.params[sid] = Object.assign(sd, p.paneParams[sid]);
+        }
+      }
+      LUM.syncActiveScene();
+    } else {
+      st.layout.mode = 'single';
+      st.layout.active = 0;
+      st.layout.panes[0] = p.scene;
+    }
     st.presetName = p.name;
+    LUM.syncCurveLUT();
     fadeKick();
     LUM.persist();
     LUM.ui.refresh();
   };
 
-  LUM.switchScene = function (id) {
-    if (!LUM.sceneById[id] || id === LUM.state.scene) return;
-    LUM.state.scene = id;
-    LUM.state.presetName = 'Custom';
-    fadeKick();
-    LUM.ui.refresh();
-  };
+  LUM.switchScene = function (id) { LUM.assignScene(id); };
 
   LUM.randomize = function (full) {
     const st = LUM.state;
@@ -83,7 +128,7 @@
     st.params[st.scene] = P;
     st.pal.id = LUM.palettes[Math.floor(Math.random() * LUM.palettes.length)].id;
     st.pal.cycle = Math.random() < 0.45 ? Math.random() * 0.025 : 0;
-    st.fx = Object.assign({}, LUM.DEFAULT_FX);
+    st.fx = JSON.parse(JSON.stringify(LUM.DEFAULT_FX));
     const fx = st.fx;
     fx.trail = Math.pow(Math.random(), 0.8) * 0.85;
     fx.fbZoom = (Math.random() * 2 - 1) * 0.25;
@@ -102,12 +147,36 @@
     if (Math.random() < 0.12) { fx.warp = Math.random() * 0.5; fx.warpReact = Math.random(); }
     if (Math.random() < 0.25) fx.sCurve = Math.random() * 0.4;
     if (Math.random() < 0.2) { fx.temp = (Math.random() * 2 - 1) * 0.4; }
+    if (Math.random() < 0.1) { fx.thresh = 0.7 + Math.random() * 0.3; fx.threshLvl = 0.25 + Math.random() * 0.4; fx.mono = Math.random() < 0.6 ? 1 : 0; }
     st.presetName = 'Random ✦';
+    LUM.syncCurveLUT();
     fadeKick();
     LUM.persist();
     LUM.ui.refresh();
     LUM.ui.toast(full ? 'Random: ' + sc.name : 'Randomized ' + sc.name);
   };
+
+  /* ---------- fullscreen ---------- */
+  let isFs = false;
+  LUM.toggleFullscreen = function () {
+    if (LUM.bridge.plugin) {
+      LUM.emit('setFullscreen', { on: !isFs });
+    } else {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+      else document.exitFullscreen().catch(() => {});
+    }
+  };
+  LUM.exitFullscreen = function () {
+    if (LUM.bridge.plugin) { if (isFs) LUM.emit('setFullscreen', { on: false }); }
+    else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  };
+  LUM.onFullscreenState = function (on) {
+    isFs = on;
+    document.body.classList.toggle('focus', on);
+  };
+  document.addEventListener('fullscreenchange', () => {
+    if (!LUM.bridge.plugin) document.body.classList.toggle('focus', !!document.fullscreenElement);
+  });
 
   /* ---------- fade (scene transitions) ---------- */
   let fadeT = 1;
@@ -202,7 +271,7 @@
     qaTimer += dt;
     if (qaTimer < 0.5) return;
     qaTimer = 0;
-    qaHud.textContent = 'v11 scene:' + LUM.state.scene +
+    qaHud.textContent = 'v20 scene:' + LUM.state.scene +
       ' fps:' + Math.round(fpsAvg) +
       ' err:' + LUM.shaderErrors.length +
       ' beat:' + LUM.audio.beatCount +
@@ -236,10 +305,40 @@
     fadeT = Math.min(1, fadeT + dt * 2.6);
     const fade = Math.pow(fadeT, 0.85);
 
-    const sc = LUM.sceneById[st.scene];
-    if (!sc._inited) { sc.init(); sc._inited = true; }
-    LUM.post.begin();
-    sc.render(LUM.paramsOf(sc.id), dt);
+    LUM.media.update(F.t);
+
+    const L = st.layout;
+    const nPanes = LUM.layoutModeById[L.mode] ? LUM.layoutModeById[L.mode].panes : 1;
+
+    if (nPanes <= 1) {
+      const sc = LUM.sceneById[st.scene];
+      if (!sc._inited) { sc.init(); sc._inited = true; }
+      LUM.renderRT = LUM.post.sceneRT;
+      LUM.post.begin();
+      sc.render(LUM.paramsOf(sc.id), dt);
+    } else {
+      const fullW = F.w, fullH = F.h;
+      const rects = LUM.paneRects(L, fullW, fullH);
+      const gl2 = LUM.gl;
+      for (let i = 0; i < rects.length; i++) {
+        const rect = rects[i];
+        const rt = LUM.paneRT(i, rect.w, rect.h);
+        const sc = LUM.sceneById[L.panes[i]] || LUM.scenes[0];
+        if (!sc._inited) { sc.init(); sc._inited = true; }
+        F.w = rect.w; F.h = rect.h;
+        LUM.renderRT = rt;
+        LUM.bindRT(rt);
+        gl2.clearColor(0, 0, 0, 1);
+        gl2.clear(gl2.COLOR_BUFFER_BIT);
+        sc.render(LUM.paramsOf(sc.id), dt);
+      }
+      F.w = fullW; F.h = fullH;
+      LUM.renderRT = LUM.post.sceneRT;
+      LUM.post.begin();
+      for (let i = 0; i < rects.length; i++)
+        LUM.composePane(LUM.paneRT(i, rects[i].w, rects[i].h), rects[i], fullW, fullH);
+    }
+
     LUM.post.run(st.fx, fade, LUM.canvas.width, LUM.canvas.height);
 
     const fps = 1 / Math.max(dt, 1e-3);
@@ -305,8 +404,10 @@
 
     LUM.onInit = d => {
       if (d && d.state) { try { LUM.applyState(JSON.parse(d.state)); } catch (e) {} }
+      if (d && d.mediaUrl) LUM.media.load(d.mediaUrl, d.mediaExt, d.mediaName);
       LUM.requestUserPresets();
     };
+    LUM.syncCurveLUT();
     LUM.bridgeReady();
     if (!LUM.bridge.plugin) {
       LUM.requestUserPresets();
