@@ -39,6 +39,8 @@
     _fluxHist: new Float32Array(90), _fluxIdx: 0, _fluxN: 0,
     _dynEnv: 0.2,
     _bassR: 0, _midR: 0, _trebR: 0, _energyR: 0,
+    /* adaptive per-feature envelopes: keep features dynamic on loud, mastered audio */
+    _bEnv: 0.3, _mEnv: 0.3, _tEnv: 0.3, _eEnv: 0.3, _vEnv: 0.5,
 
     update(dt) {
       const src = LUM.source;
@@ -93,26 +95,48 @@
       this.centroid = sumW > 0.001 ? (sumAll / sumW) / 95 : this.centroid;
       this.domNorm = maxI / 95;
 
-      /* bass / mid / treb (20–150Hz / 150Hz–2kHz / 2kHz+) */
+      /* bass / mid / treb (20–150Hz / 150Hz–2kHz / 2kHz+), with per-band trims */
+      const bassG = aud.bassG !== undefined ? aud.bassG : 1;
+      const midG = aud.midG !== undefined ? aud.midG : 1;
+      const trebG = aud.trebG !== undefined ? aud.trebG : 1;
       let b = 0, m = 0, tr = 0;
       for (let i = 0; i < 27; i++) b += this.sm[i];
       for (let i = 27; i < 64; i++) m += this.sm[i];
       for (let i = 64; i < NB; i++) tr += this.sm[i];
       b /= 27; m /= 37; tr /= 32;
       const eC = 1 - Math.exp(-dt / 0.09);
-      this._bassR += eC * (Math.min(1, b * 3.2) - this._bassR);
-      this._midR += eC * (Math.min(1, m * 2.2) - this._midR);
-      this._trebR += eC * (Math.min(1, tr * 1.5) - this._trebR);
-      const eTarget = Math.min(1, this.rms * gain * 2.2);
-      this._energyR += (1 - Math.exp(-dt / 0.18)) * (eTarget - this._energyR);
+      this._bassR += eC * (b - this._bassR);
+      this._midR += eC * (m - this._midR);
+      this._trebR += eC * (tr - this._trebR);
+      const eTargetRaw = this.rms * gain;
+      this._energyR += (1 - Math.exp(-dt / 0.18)) * (eTargetRaw - this._energyR);
+
+      /* adaptive normalization: each feature is measured against its own recent
+         peak (~4s memory) so loud mastered audio keeps full dynamic range
+         instead of pinning everything at maximum. */
+      const envDecay = Math.exp(-dt / 4.0);
+      this._bEnv = Math.max(this._bEnv * envDecay, this._bassR, 0.045);
+      this._mEnv = Math.max(this._mEnv * envDecay, this._midR, 0.045);
+      this._tEnv = Math.max(this._tEnv * envDecay, this._trebR, 0.045);
+      this._eEnv = Math.max(this._eEnv * envDecay, this._energyR, 0.045);
+      const bassN = Math.min(1.2, this._bassR / this._bEnv * 0.92 * bassG);
+      const midN = Math.min(1.2, this._midR / this._mEnv * 0.88 * midG);
+      const trebN = Math.min(1.2, this._trebR / this._tEnv * 0.85 * trebG);
+      const energyN = Math.min(1.2, this._energyR / this._eEnv * 0.9);
+
+      /* spectrum headroom: normalize the band texture by its recent max */
+      let smMax = 0;
+      for (let i = 0; i < NB; i++) if (this.sm[i] > smMax) smMax = this.sm[i];
+      this._vEnv = Math.max(this._vEnv * envDecay, smMax, 0.25);
+      const vScale = 0.94 / this._vEnv;
 
       /* ---- reactivity shaping: floor / curve / amount / dynamics ---- */
       const react = aud.react !== undefined ? aud.react : 1;
       const floorV = Math.min(0.6, aud.floor || 0);
       const curveV = aud.curve !== undefined ? aud.curve : 1;
       const dyn = aud.dyn || 0;
-      this._dynEnv += (1 - Math.exp(-dt / 0.45)) * (this._energyR - this._dynEnv);
-      const dynGain = dyn > 0 ? Math.pow(Math.min(1, this._dynEnv / 0.3), dyn * 2.2) : 1;
+      this._dynEnv += (1 - Math.exp(-dt / 0.45)) * (energyN - this._dynEnv);
+      const dynGain = dyn > 0 ? Math.pow(Math.min(1, this._dynEnv / 0.55), dyn * 2.2) : 1;
       const den = 1 / Math.max(0.05, 1 - floorV);
       const lut = aud.respLut && aud.respLut.length >= 8 ? aud.respLut : null;
       const shape = v => {
@@ -129,11 +153,18 @@
         v = v * react * dynGain;
         return v > 1 ? 1 : v < 0 ? 0 : v;
       };
-      for (let i = 0; i < NB; i++) this.view[i] = shape(this.sm[i]);
-      this.bass = shape(this._bassR);
-      this.mid = shape(this._midR);
-      this.treb = shape(this._trebR);
-      this.energy = shape(this._energyR);
+      for (let i = 0; i < NB; i++) {
+        const g3 = i < 22 ? bassG
+          : i < 32 ? bassG + (midG - bassG) * ((i - 22) / 10)
+          : i < 58 ? midG
+          : i < 70 ? midG + (trebG - midG) * ((i - 58) / 12)
+          : trebG;
+        this.view[i] = shape(Math.min(1, this.sm[i] * vScale * g3));
+      }
+      this.bass = shape(Math.min(1, bassN));
+      this.mid = shape(Math.min(1, midN));
+      this.treb = shape(Math.min(1, trebN));
+      this.energy = shape(Math.min(1, energyN));
 
       /* beat detection: spectral flux + adaptive threshold */
       const H = this._fluxHist;
