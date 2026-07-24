@@ -6,6 +6,16 @@
  #include <windows.h>
 #endif
 
+#if JUCE_WINDOWS
+static HWND getTopLevelHwnd (juce::ComponentPeer* peer)
+{
+    if (peer == nullptr)
+        return nullptr;
+    return GetAncestor ((HWND) peer->getNativeHandle(), GA_ROOT);
+}
+#endif
+
+
 namespace
 {
     juce::var propOr (const juce::var& v, const juce::Identifier& key, const juce::var& fallback)
@@ -68,15 +78,6 @@ void LuminaAudioProcessorEditor::resized()
 /*  Host-window styling. Lumina can hide the host's plugin-window title bar entirely
     (the UI provides its own X and drag), and go borderless-fullscreen across the
     monitor. Styles are captured once and re-derived from the current mode. */
-
-#if JUCE_WINDOWS
-static HWND getTopLevelHwnd (juce::ComponentPeer* peer)
-{
-    if (peer == nullptr)
-        return nullptr;
-    return GetAncestor ((HWND) peer->getNativeHandle(), GA_ROOT);
-}
-#endif
 
 void LuminaAudioProcessorEditor::applyHostWindowStyle()
 {
