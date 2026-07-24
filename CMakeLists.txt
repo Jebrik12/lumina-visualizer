@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Lumina VERSION 1.1.0 LANGUAGES C CXX)
+project(Lumina VERSION 2.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -41,6 +41,10 @@ juce_add_binary_data(LuminaWebAssets
         ui/index.html
         ui/app.css
         ui/js/palettes.js
+        ui/js/icons.js
+        ui/js/widgets.js
+        ui/js/media.js
+        ui/js/layout.js
         ui/js/gl.js
         ui/js/audio.js
         ui/js/post.js
@@ -49,6 +53,8 @@ juce_add_binary_data(LuminaWebAssets
         ui/js/scenes_fractal.js
         ui/js/scenes_motion.js
         ui/js/scenes_texture.js
+        ui/js/scenes_minimal.js
+        ui/js/scenes_meters.js
         ui/js/presets.js
         ui/js/bridge.js
         ui/js/ui.js
