@@ -284,13 +284,24 @@
     iconBtn(nav, 'upload', 'Import preset / setup', importPresetFlow);
 
     el('div', 'spacer', tb);
-    const src = el('div', 'srcLabel', tb); src.id = 'srcLabel';
+    if (!LUM.bridge.plugin) {
+      const src = el('div', 'srcLabel', tb); src.id = 'srcLabel';
+    }
     const fps = el('div', 'fps', tb); fps.id = 'fps';
     iconBtn(tb, 'dice', 'Randomize look (R) — Shift-click: random scene too', e => LUM.randomize(e.shiftKey), 'btnDice');
     iconBtn(tb, 'shuffle', 'Shuffle presets on beat (S)', toggleShuffle, 'btnShuffle');
-    iconBtn(tb, 'maximize', 'Fullscreen (F)', () => LUM.toggleFullscreen());
+    iconBtn(tb, 'maximize', 'Fullscreen (F)', () => LUM.toggleFullscreen(), 'btnFs');
     iconBtn(tb, 'help', 'Help & shortcuts (H)', helpModal);
+    const xb = iconBtn(tb, 'x', 'Exit fullscreen (Esc)', () => LUM.exitFullscreen(), 'btnExitFs');
+    xb.style.display = 'none';
   }
+
+  ui.setFullscreenUi = function (on) {
+    const xb = $('#btnExitFs');
+    if (xb) xb.style.display = on ? '' : 'none';
+    const fsb = $('#btnFs');
+    if (fsb) fsb.classList.toggle('activeBtn', !!on);
+  };
 
   function buildScenePanel() {
     const sp = $('#scenePanel');
@@ -376,7 +387,18 @@
 
   function fxPresetRow(body) {
     const st = LUM.state;
-    const g = group(body, 'FX Preset');
+    const lockBtn = el('button', 'iconBtn', null);
+    lockBtn.innerHTML = LUM.icon(st.fxLock ? 'lock' : 'unlock');
+    lockBtn.title = st.fxLock
+      ? 'FX locked — scene presets & randomize won’t change your FX. Click to unlock.'
+      : 'FX unlocked — scene presets bring their own FX. Click to lock yours in place.';
+    lockBtn.classList.toggle('activeBtn', !!st.fxLock);
+    lockBtn.addEventListener('click', () => {
+      st.fxLock = !st.fxLock;
+      LUM.persist(); ui.refresh();
+      ui.toast(st.fxLock ? 'FX locked — presets won’t change it' : 'FX unlocked');
+    });
+    const g = group(body, 'FX Preset', lockBtn);
     const row = el('div', 'btnRow', g);
     const sel = el('select', 'ctlSel', row);
     sel.style.flex = '1';
@@ -394,10 +416,11 @@
       if (v.startsWith('f:')) p = LUM.factoryFxPresets[+v.slice(2)];
       else if (v.startsWith('u:')) p = ui.userFxPresets[+v.slice(2)];
       if (p) {
-        st.fx = Object.assign({}, LUM.DEFAULT_FX, p.fx);
+        st.fx = Object.assign({}, LUM.DEFAULT_FX, JSON.parse(JSON.stringify(p.fx)));
+        st.fxLock = true;
         LUM.syncCurveLUT();
         LUM.persist(); ui.refresh();
-        ui.toast('FX preset: ' + p.name);
+        ui.toast('FX preset: ' + p.name + ' — locked in (padlock in FX tab to unlock)');
       }
     });
     const save = el('button', 'iconBtn', row);
