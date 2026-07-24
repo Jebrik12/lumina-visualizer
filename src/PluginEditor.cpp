@@ -31,14 +31,51 @@ LuminaAudioProcessorEditor::LuminaAudioProcessorEditor (LuminaAudioProcessor& p)
 
 LuminaAudioProcessorEditor::~LuminaAudioProcessorEditor()
 {
+    setNativeFullscreen (false);
     stopTimer();
 }
 
 void LuminaAudioProcessorEditor::resized()
 {
-    webView.setBounds (getLocalBounds());
+    if (fsShell == nullptr)
+        webView.setBounds (getLocalBounds());
     proc.editorW = getWidth();
     proc.editorH = getHeight();
+}
+
+void LuminaAudioProcessorEditor::setNativeFullscreen (bool shouldBeFullscreen)
+{
+    if (shouldBeFullscreen == (fsShell != nullptr))
+        return;
+
+    if (shouldBeFullscreen)
+    {
+        fsShell = std::make_unique<FullscreenShell> ([this] { setNativeFullscreen (false); });
+        const auto& displays = juce::Desktop::getInstance().getDisplays();
+        const auto* display = displays.getDisplayForRect (getScreenBounds());
+        if (display == nullptr)
+            display = displays.getPrimaryDisplay();
+        const auto area = display != nullptr ? display->totalArea : juce::Rectangle<int> (0, 0, 1920, 1080);
+        fsShell->setBounds (area);
+        fsShell->setAlwaysOnTop (true);
+        fsShell->addToDesktop (0);
+        fsShell->setVisible (true);
+        fsShell->addAndMakeVisible (webView);
+        fsShell->resized();
+        fsShell->toFront (true);
+    }
+    else
+    {
+        addAndMakeVisible (webView);
+        if (fsShell != nullptr)
+            fsShell->removeFromDesktop();
+        fsShell.reset();
+        resized();
+    }
+
+    auto obj = std::make_unique<juce::DynamicObject>();
+    obj->setProperty ("on", fsShell != nullptr);
+    webView.emitEventIfBrowserIsVisible ("fullscreenState", juce::var (obj.release()));
 }
 
 /* ---------------- options + event wiring ---------------- */
@@ -70,7 +107,15 @@ juce::WebBrowserComponent::Options LuminaAudioProcessorEditor::makeOptions()
         .withEventListener ("copyText", [this] (const juce::var& v) { onCopyText (v); })
         .withEventListener ("requestPaste", [this] (const juce::var&) { onRequestPaste(); })
         .withEventListener ("exportPreset", [this] (const juce::var& v) { onExportPreset (v); })
-        .withEventListener ("importPreset", [this] (const juce::var&) { onImportPreset(); });
+        .withEventListener ("importPreset", [this] (const juce::var&) { onImportPreset(); })
+        .withEventListener ("setFullscreen", [this] (const juce::var& v)
+                            { setNativeFullscreen ((bool) propOr (v, "on", false)); })
+        .withEventListener ("pickMedia", [this] (const juce::var&) { onPickMedia(); })
+        .withEventListener ("clearMedia", [this] (const juce::var&)
+                            {
+                                proc.setMediaPath ("");
+                                sendMediaInfo();
+                            });
 }
 
 void LuminaAudioProcessorEditor::sendInit()
@@ -79,7 +124,62 @@ void LuminaAudioProcessorEditor::sendInit()
     obj->setProperty ("state", proc.getUiState());
     obj->setProperty ("sampleRate", proc.getSampleRate() > 0 ? proc.getSampleRate() : 48000.0);
     obj->setProperty ("version", JucePlugin_VersionString);
+
+    const auto mediaPath = proc.getMediaPath();
+    if (mediaPath.isNotEmpty() && juce::File (mediaPath).existsAsFile())
+    {
+        juce::File f (mediaPath);
+        obj->setProperty ("mediaName", f.getFileName());
+        obj->setProperty ("mediaExt", f.getFileExtension().toLowerCase());
+        obj->setProperty ("mediaUrl", "/media/current?v=" + juce::String (juce::Random::getSystemRandom().nextInt (1 << 30)));
+    }
+
     webView.emitEventIfBrowserIsVisible ("init", juce::var (obj.release()));
+}
+
+void LuminaAudioProcessorEditor::sendMediaInfo()
+{
+    auto obj = std::make_unique<juce::DynamicObject>();
+    const auto mediaPath = proc.getMediaPath();
+    if (mediaPath.isNotEmpty() && juce::File (mediaPath).existsAsFile())
+    {
+        juce::File f (mediaPath);
+        obj->setProperty ("name", f.getFileName());
+        obj->setProperty ("ext", f.getFileExtension().toLowerCase());
+        obj->setProperty ("url", "/media/current?v=" + juce::String (juce::Random::getSystemRandom().nextInt (1 << 30)));
+    }
+    webView.emitEventIfBrowserIsVisible ("mediaInfo", juce::var (obj.release()));
+}
+
+void LuminaAudioProcessorEditor::onPickMedia()
+{
+    fileChooser = std::make_unique<juce::FileChooser> (
+        "Load image / GIF / video",
+        juce::File::getSpecialLocation (juce::File::userPicturesDirectory),
+        "*.png;*.jpg;*.jpeg;*.webp;*.gif;*.mp4;*.webm");
+
+    juce::Component::SafePointer<LuminaAudioProcessorEditor> safe (this);
+
+    fileChooser->launchAsync (juce::FileBrowserComponent::openMode
+                                  | juce::FileBrowserComponent::canSelectFiles,
+                              [safe] (const juce::FileChooser& fc)
+                              {
+                                  if (safe == nullptr)
+                                      return;
+                                  auto f = fc.getResult();
+                                  if (f == juce::File {} || ! f.existsAsFile())
+                                      return;
+                                  auto dir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                                                 .getChildFile ("Lumina")
+                                                 .getChildFile ("media");
+                                  dir.createDirectory();
+                                  auto dest = dir.getChildFile (f.getFileName());
+                                  if (f.getFullPathName() == dest.getFullPathName() || f.copyFileTo (dest))
+                                  {
+                                      safe->proc.setMediaPath (dest.getFullPathName());
+                                      safe->sendMediaInfo();
+                                  }
+                              });
 }
 
 void LuminaAudioProcessorEditor::pushStateToWeb()
@@ -115,8 +215,36 @@ std::optional<juce::WebBrowserComponent::Resource>
 LuminaAudioProcessorEditor::getResource (const juce::String& url)
 {
     auto path = url.startsWith ("/") ? url.substring (1) : url;
+    if (path.contains ("?"))
+        path = path.upToFirstOccurrenceOf ("?", false, false);
     if (path.isEmpty())
         path = "index.html";
+
+    if (path == "media/current")
+    {
+        const auto mediaPath = proc.getMediaPath();
+        juce::File f (mediaPath);
+        if (mediaPath.isNotEmpty() && f.existsAsFile())
+        {
+            juce::MemoryBlock mb;
+            if (f.loadFileAsData (mb))
+            {
+                const auto ext = f.getFileExtension().toLowerCase();
+                juce::String mime = "application/octet-stream";
+                if (ext == ".png") mime = "image/png";
+                else if (ext == ".jpg" || ext == ".jpeg") mime = "image/jpeg";
+                else if (ext == ".webp") mime = "image/webp";
+                else if (ext == ".gif") mime = "image/gif";
+                else if (ext == ".mp4") mime = "video/mp4";
+                else if (ext == ".webm") mime = "video/webm";
+                const auto* bytes = static_cast<const std::byte*> (mb.getData());
+                return juce::WebBrowserComponent::Resource {
+                    std::vector<std::byte> (bytes, bytes + mb.getSize()), mime
+                };
+            }
+        }
+        return std::nullopt;
+    }
 
     for (const auto& asset : kWebAssets)
     {
