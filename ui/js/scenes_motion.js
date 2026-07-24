@@ -108,7 +108,7 @@
       });
       LUM.fsq();
 
-      LUM.bindRT(LUM.post.sceneRT);
+      LUM.bindRT(LUM.renderRT || LUM.post.sceneRT);
       LUM.blendAdd();
       this.drawPrg.use();
       LUM.setCommon(this.drawPrg);
@@ -185,7 +185,7 @@
         uScaleI: P.scale, uInjectI: P.inject, uBassWarp: P.bassWarp
       });
       LUM.fsq();
-      LUM.bindRT(LUM.post.sceneRT);
+      LUM.bindRT(LUM.renderRT || LUM.post.sceneRT);
       this.showPrg.use();
       LUM.setCommon(this.showPrg);
       this.showPrg.set('uDye', this.pp.a.tex);
