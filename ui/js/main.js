@@ -13,6 +13,7 @@
       ui: Object.assign({}, LUM.DEFAULT_UI),
       layout: JSON.parse(JSON.stringify(LUM.DEFAULT_LAYOUT)),
       fxLock: false,
+      locks: { scene: false, layout: false, color: false },
       presetName: 'Neon Halo'
     };
   }
@@ -40,6 +41,7 @@
       ui: Object.assign({}, d.ui, s.ui || {}),
       layout: Object.assign({}, d.layout, s.layout || {}),
       fxLock: !!s.fxLock,
+      locks: Object.assign({ scene: false, layout: false, color: false }, s.locks || {}),
       presetName: s.presetName || 'Custom'
     };
     if (!Array.isArray(LUM.state.layout.panes) || LUM.state.layout.panes.length < 6)
@@ -114,10 +116,9 @@
 
   LUM.switchScene = function (id) { LUM.assignScene(id); };
 
-  LUM.randomize = function (full) {
-    const st = LUM.state;
-    if (full) st.scene = LUM.scenes[Math.floor(Math.random() * LUM.scenes.length)].id;
-    const sc = LUM.sceneById[st.scene];
+  /* ---------- randomize system ---------- */
+  function randParamsFor(sceneId) {
+    const sc = LUM.sceneById[sceneId];
     const P = {};
     sc.params.forEach(d => {
       if (d.type === 'select') P[d.k] = Math.floor(Math.random() * d.opts.length);
@@ -128,19 +129,11 @@
         P[d.k] = v;
       }
     });
-    st.params[st.scene] = P;
-    st.pal.id = LUM.palettes[Math.floor(Math.random() * LUM.palettes.length)].id;
-    st.pal.cycle = Math.random() < 0.45 ? Math.random() * 0.025 : 0;
-    if (st.fxLock) {
-      st.presetName = 'Random ✦';
-      fadeKick();
-      LUM.persist();
-      LUM.ui.refresh();
-      LUM.ui.toast((full ? 'Random: ' + sc.name : 'Randomized ' + sc.name) + ' (FX locked)');
-      return;
-    }
-    st.fx = JSON.parse(JSON.stringify(LUM.DEFAULT_FX));
-    const fx = st.fx;
+    return P;
+  }
+
+  function randFx() {
+    const fx = JSON.parse(JSON.stringify(LUM.DEFAULT_FX));
     fx.trail = Math.pow(Math.random(), 0.8) * 0.85;
     fx.fbZoom = (Math.random() * 2 - 1) * 0.25;
     fx.fbRot = (Math.random() * 2 - 1) * 0.3;
@@ -149,7 +142,6 @@
     fx.kaleido = Math.random() < 0.16 ? [3, 4, 5, 6, 8][Math.floor(Math.random() * 5)] : 0;
     fx.mirror = Math.random() < 0.1 ? 1 + Math.floor(Math.random() * 3) : 0;
     fx.hueSpeed = Math.random() < 0.3 ? (Math.random() * 2 - 1) * 45 : 0;
-    /* occasional grunge sprinkle */
     if (Math.random() < 0.18) { fx.glitch = 0.3 + Math.random() * 0.55; fx.glitchBeat = Math.random() < 0.7 ? 1 : 0; }
     if (Math.random() < 0.14) { fx.vhs = 0.25 + Math.random() * 0.5; fx.vhsJit = Math.random() * 0.5; }
     if (Math.random() < 0.16) fx.dirt = 0.3 + Math.random() * 0.5;
@@ -157,18 +149,123 @@
     if (Math.random() < 0.15) fx.lens = (Math.random() * 2 - 1) * 0.5;
     if (Math.random() < 0.12) { fx.warp = Math.random() * 0.5; fx.warpReact = Math.random(); }
     if (Math.random() < 0.25) fx.sCurve = Math.random() * 0.4;
-    if (Math.random() < 0.2) { fx.temp = (Math.random() * 2 - 1) * 0.4; }
+    if (Math.random() < 0.2) fx.temp = (Math.random() * 2 - 1) * 0.4;
     if (Math.random() < 0.1) { fx.thresh = 0.7 + Math.random() * 0.3; fx.threshLvl = 0.25 + Math.random() * 0.4; fx.mono = Math.random() < 0.6 ? 1 : 0; }
-    st.presetName = 'Random ✦';
-    LUM.syncCurveLUT();
+    return fx;
+  }
+
+  function randScene() {
+    return LUM.scenes[Math.floor(Math.random() * LUM.scenes.length)].id;
+  }
+
+  /* randomize a single category: 'scene' (params of active pane scene),
+     'fx', 'color', 'layout' (mode + pane scenes) */
+  LUM.randCategory = function (cat) {
+    const st = LUM.state;
+    if (cat === 'scene') {
+      st.params[st.scene] = randParamsFor(st.scene);
+      LUM.ui.toast('Randomized ' + LUM.sceneById[st.scene].name + ' parameters');
+    } else if (cat === 'fx') {
+      st.fx = randFx();
+      LUM.syncCurveLUT();
+      LUM.ui.toast('Randomized FX');
+    } else if (cat === 'color') {
+      st.pal.id = LUM.palettes[Math.floor(Math.random() * LUM.palettes.length)].id;
+      st.pal.cycle = Math.random() < 0.45 ? Math.random() * 0.025 : 0;
+      st.pal.shift = Math.random() < 0.3 ? Math.random() : 0;
+      LUM.ui.toast('Randomized palette');
+    } else if (cat === 'layout') {
+      const modes = ['single', 'single', '2h', '2v', '3h', 'quad', '6h'];
+      st.layout.mode = modes[Math.floor(Math.random() * modes.length)];
+      st.layout.split = 0.3 + Math.random() * 0.4;
+      st.layout.splitV = 0.3 + Math.random() * 0.4;
+      const n = LUM.layoutModeById[st.layout.mode].panes;
+      for (let i = 0; i < n; i++) st.layout.panes[i] = randScene();
+      st.layout.active = 0;
+      LUM.syncActiveScene();
+      LUM.ui.toast('Randomized layout');
+    }
+    st.presetName = 'Random \u2726';
     fadeKick();
     LUM.persist();
     LUM.ui.refresh();
-    LUM.ui.toast(full ? 'Random: ' + sc.name : 'Randomized ' + sc.name);
+  };
+
+  /* topbar dice: randomize everything that isn't locked */
+  LUM.randomizeAll = function () {
+    const st = LUM.state;
+    const L = st.locks || {};
+    if (!L.layout) {
+      const modes = ['single', 'single', 'single', '2h', '2v', 'quad'];
+      st.layout.mode = modes[Math.floor(Math.random() * modes.length)];
+      st.layout.split = 0.3 + Math.random() * 0.4;
+      st.layout.splitV = 0.3 + Math.random() * 0.4;
+      st.layout.active = 0;
+    }
+    if (!L.scene) {
+      const n = LUM.layoutModeById[st.layout.mode].panes;
+      for (let i = 0; i < n; i++) {
+        st.layout.panes[i] = randScene();
+        st.params[st.layout.panes[i]] = randParamsFor(st.layout.panes[i]);
+      }
+      LUM.syncActiveScene();
+    } else {
+      LUM.syncActiveScene();
+    }
+    if (!st.fxLock) {
+      st.fx = randFx();
+      LUM.syncCurveLUT();
+    }
+    if (!L.color) {
+      st.pal.id = LUM.palettes[Math.floor(Math.random() * LUM.palettes.length)].id;
+      st.pal.cycle = Math.random() < 0.45 ? Math.random() * 0.025 : 0;
+    }
+    st.presetName = 'Random \u2726';
+    fadeKick();
+    LUM.persist();
+    LUM.ui.refresh();
+    const lockedBits = [L.scene && 'scene', L.layout && 'layout', st.fxLock && 'fx', L.color && 'color'].filter(Boolean);
+    LUM.ui.toast('Randomized everything' + (lockedBits.length ? ' (locked: ' + lockedBits.join(', ') + ')' : ''));
+  };
+
+  /* legacy alias */
+  LUM.randomize = function () { LUM.randomizeAll(); };
+
+  /* ---------- undo / redo ---------- */
+  const histStack = [];
+  let redoStack = [];
+  let histLock = false;
+  LUM.pushHistory = function () {
+    if (histLock || !LUM.state) return;
+    const j = JSON.stringify(LUM.state);
+    if (histStack.length && histStack[histStack.length - 1] === j) return;
+    histStack.push(j);
+    if (histStack.length > 60) histStack.shift();
+    redoStack = [];
+  };
+  LUM.undo = function () {
+    if (histStack.length < 2) { LUM.ui.toast('Nothing to undo'); return; }
+    redoStack.push(histStack.pop());
+    histLock = true;
+    LUM.applyState(JSON.parse(histStack[histStack.length - 1]));
+    histLock = false;
+    LUM.persist();
+    LUM.ui.toast('Undo');
+  };
+  LUM.redo = function () {
+    if (!redoStack.length) { LUM.ui.toast('Nothing to redo'); return; }
+    const j = redoStack.pop();
+    histStack.push(j);
+    histLock = true;
+    LUM.applyState(JSON.parse(j));
+    histLock = false;
+    LUM.persist();
+    LUM.ui.toast('Redo');
   };
 
   /* ---------- fullscreen ---------- */
   let isFs = false;
+  LUM.isFullscreen = function () { return isFs; };
   LUM.toggleFullscreen = function () {
     if (LUM.bridge.plugin) {
       LUM.emit('setFullscreen', { on: !isFs });
@@ -282,7 +379,7 @@
     qaTimer += dt;
     if (qaTimer < 0.5) return;
     qaTimer = 0;
-    qaHud.textContent = 'v21 scene:' + LUM.state.scene +
+    qaHud.textContent = 'v22 scene:' + LUM.state.scene +
       ' fps:' + Math.round(fpsAvg) +
       ' err:' + LUM.shaderErrors.length +
       ' beat:' + LUM.audio.beatCount +
@@ -420,6 +517,15 @@
     };
     LUM.syncCurveLUT();
     LUM.bridgeReady();
+    if (LUM.bridge.plugin) {
+      /* apply host-bar preference shortly after the state lands */
+      setTimeout(() => {
+        LUM.emit('setHostBar', { hide: !!LUM.state.ui.hideHostBar });
+        if (LUM.ui.updateCloseBtn) LUM.ui.updateCloseBtn();
+      }, 400);
+    }
+    /* seed undo history with the boot state */
+    setTimeout(() => LUM.pushHistory(), 600);
     if (!LUM.bridge.plugin) {
       LUM.requestUserPresets();
       LUM.ui.toast('Simulated audio playing — pick Mic / Tab / File in the Audio tab');
