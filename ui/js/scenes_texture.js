@@ -165,7 +165,7 @@
         this.pp.swap();
         if (this._seedFrames > 0) this._seedFrames--;
       }
-      LUM.bindRT(LUM.post.sceneRT);
+      LUM.bindRT(LUM.renderRT || LUM.post.sceneRT);
       this.showPrg.use();
       LUM.setCommon(this.showPrg);
       this.showPrg.set('uRD', this.pp.b.tex);
