@@ -37,6 +37,21 @@ LuminaAudioProcessorEditor::LuminaAudioProcessorEditor (LuminaAudioProcessor& p)
 LuminaAudioProcessorEditor::~LuminaAudioProcessorEditor()
 {
     setNativeFullscreen (false);
+
+   #if JUCE_WINDOWS
+    /* restore the host window's original frame so a reopened editor starts clean */
+    if (styleCaptured)
+    {
+        if (HWND top = getTopLevelHwnd (getPeer()))
+        {
+            SetWindowLongPtr (top, GWL_STYLE, (LONG_PTR) hostStyleOriginal);
+            SetWindowLongPtr (top, GWL_EXSTYLE, (LONG_PTR) hostExStyleOriginal);
+            SetWindowPos (top, nullptr, 0, 0, 0, 0,
+                          SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+        }
+    }
+   #endif
+
     stopTimer();
 }
 
@@ -50,21 +65,94 @@ void LuminaAudioProcessorEditor::resized()
     }
 }
 
-/*  Fullscreen: instead of moving the WebView into another window (unreliable with
-    WebView2), we make the HOST's plugin window borderless and stretch it across the
-    monitor, resizing the editor to match. On exit everything is restored exactly. */
+/*  Host-window styling. Lumina can hide the host's plugin-window title bar entirely
+    (the UI provides its own X and drag), and go borderless-fullscreen across the
+    monitor. Styles are captured once and re-derived from the current mode. */
+
+#if JUCE_WINDOWS
+static HWND getTopLevelHwnd (juce::ComponentPeer* peer)
+{
+    if (peer == nullptr)
+        return nullptr;
+    return GetAncestor ((HWND) peer->getNativeHandle(), GA_ROOT);
+}
+#endif
+
+void LuminaAudioProcessorEditor::applyHostWindowStyle()
+{
+   #if JUCE_WINDOWS
+    HWND top = getTopLevelHwnd (getPeer());
+    if (top == nullptr)
+        return;
+
+    if (! styleCaptured)
+    {
+        hostStyleOriginal = (juce::int64) GetWindowLongPtr (top, GWL_STYLE);
+        hostExStyleOriginal = (juce::int64) GetWindowLongPtr (top, GWL_EXSTYLE);
+        styleCaptured = true;
+    }
+
+    LONG_PTR style = (LONG_PTR) hostStyleOriginal;
+    if (fsActive)
+        style = (style & ~(LONG_PTR) (WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU)) | WS_POPUP;
+    else if (barHidden)
+        style = (style & ~(LONG_PTR) (WS_CAPTION | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU)) | WS_POPUP | WS_THICKFRAME;
+
+    SetWindowLongPtr (top, GWL_STYLE, style);
+    SetWindowPos (top, nullptr, 0, 0, 0, 0,
+                  SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_SHOWWINDOW);
+   #endif
+}
+
+void LuminaAudioProcessorEditor::setHostBarHidden (bool shouldHide)
+{
+   #if JUCE_WINDOWS
+    barHidden = shouldHide;
+    if (! fsActive)
+        applyHostWindowStyle();
+   #else
+    juce::ignoreUnused (shouldHide);
+   #endif
+}
+
+void LuminaAudioProcessorEditor::dragHostWindow (int dx, int dy)
+{
+   #if JUCE_WINDOWS
+    if (fsActive)
+        return;
+    HWND top = getTopLevelHwnd (getPeer());
+    if (top == nullptr)
+        return;
+    RECT r {};
+    GetWindowRect (top, &r);
+    SetWindowPos (top, nullptr, r.left + dx, r.top + dy, 0, 0,
+                  SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+   #else
+    juce::ignoreUnused (dx, dy);
+   #endif
+}
+
+void LuminaAudioProcessorEditor::closeHostWindow()
+{
+   #if JUCE_WINDOWS
+    if (fsActive)
+    {
+        setNativeFullscreen (false);
+        return;
+    }
+    HWND top = getTopLevelHwnd (getPeer());
+    if (top != nullptr)
+        PostMessage (top, WM_CLOSE, 0, 0);
+   #endif
+}
+
 void LuminaAudioProcessorEditor::setNativeFullscreen (bool shouldBeFullscreen)
 {
    #if JUCE_WINDOWS
     if (shouldBeFullscreen == fsActive)
         return;
 
-    auto* peer = getPeer();
-    if (peer == nullptr)
-        return;
-
-    HWND child = (HWND) peer->getNativeHandle();
-    HWND top = GetAncestor (child, GA_ROOT);
+    HWND top = getTopLevelHwnd (getPeer());
     if (top == nullptr)
         return;
 
@@ -72,8 +160,6 @@ void LuminaAudioProcessorEditor::setNativeFullscreen (bool shouldBeFullscreen)
     {
         fsPrevW = getWidth();
         fsPrevH = getHeight();
-        fsPrevStyle = (juce::int64) GetWindowLongPtr (top, GWL_STYLE);
-        fsPrevExStyle = (juce::int64) GetWindowLongPtr (top, GWL_EXSTYLE);
         RECT r {};
         GetWindowRect (top, &r);
         fsPrevRect[0] = r.left; fsPrevRect[1] = r.top;
@@ -86,16 +172,13 @@ void LuminaAudioProcessorEditor::setNativeFullscreen (bool shouldBeFullscreen)
         const int mw = mi.rcMonitor.right - mi.rcMonitor.left;
         const int mh = mi.rcMonitor.bottom - mi.rcMonitor.top;
 
-        /* logical (JUCE) size of the same monitor for the editor itself */
         const auto& displays = juce::Desktop::getInstance().getDisplays();
         const auto* display = displays.getDisplayForRect (getScreenBounds());
         if (display == nullptr) display = displays.getPrimaryDisplay();
         const auto logical = display != nullptr ? display->totalArea : juce::Rectangle<int> (0, 0, mw, mh);
 
         fsActive = true;
-
-        SetWindowLongPtr (top, GWL_STYLE,
-                          (LONG_PTR) ((fsPrevStyle & ~(LONG_PTR) (WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU)) | WS_POPUP));
+        applyHostWindowStyle();
         SetWindowPos (top, HWND_TOPMOST, mi.rcMonitor.left, mi.rcMonitor.top, mw, mh,
                       SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOOWNERZORDER);
         setSize (logical.getWidth(), logical.getHeight());
@@ -105,9 +188,7 @@ void LuminaAudioProcessorEditor::setNativeFullscreen (bool shouldBeFullscreen)
     else
     {
         fsActive = false;
-
-        SetWindowLongPtr (top, GWL_STYLE, (LONG_PTR) fsPrevStyle);
-        SetWindowLongPtr (top, GWL_EXSTYLE, (LONG_PTR) fsPrevExStyle);
+        applyHostWindowStyle();
         setSize (fsPrevW, fsPrevH);
         SetWindowPos (top, HWND_NOTOPMOST, fsPrevRect[0], fsPrevRect[1], fsPrevRect[2], fsPrevRect[3],
                       SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOOWNERZORDER);
@@ -153,6 +234,11 @@ juce::WebBrowserComponent::Options LuminaAudioProcessorEditor::makeOptions()
         .withEventListener ("importPreset", [this] (const juce::var&) { onImportPreset(); })
         .withEventListener ("setFullscreen", [this] (const juce::var& v)
                             { setNativeFullscreen ((bool) propOr (v, "on", false)); })
+        .withEventListener ("setHostBar", [this] (const juce::var& v)
+                            { setHostBarHidden ((bool) propOr (v, "hide", false)); })
+        .withEventListener ("dragWindow", [this] (const juce::var& v)
+                            { dragHostWindow ((int) propOr (v, "dx", 0), (int) propOr (v, "dy", 0)); })
+        .withEventListener ("closeWindow", [this] (const juce::var&) { closeHostWindow(); })
         .withEventListener ("pickMedia", [this] (const juce::var&) { onPickMedia(); })
         .withEventListener ("clearMedia", [this] (const juce::var&)
                             {
