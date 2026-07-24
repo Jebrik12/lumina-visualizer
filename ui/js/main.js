@@ -12,6 +12,7 @@
       aud: Object.assign({}, LUM.DEFAULT_AUD),
       ui: Object.assign({}, LUM.DEFAULT_UI),
       layout: JSON.parse(JSON.stringify(LUM.DEFAULT_LAYOUT)),
+      fxLock: false,
       presetName: 'Neon Halo'
     };
   }
@@ -38,6 +39,7 @@
       aud: Object.assign({}, d.aud, s.aud || {}),
       ui: Object.assign({}, d.ui, s.ui || {}),
       layout: Object.assign({}, d.layout, s.layout || {}),
+      fxLock: !!s.fxLock,
       presetName: s.presetName || 'Custom'
     };
     if (!Array.isArray(LUM.state.layout.panes) || LUM.state.layout.panes.length < 6)
@@ -82,7 +84,8 @@
     const defs = {};
     LUM.sceneById[p.scene].params.forEach(d => { defs[d.k] = d.def; });
     st.params[p.scene] = Object.assign(defs, p.p || {});
-    st.fx = Object.assign({}, LUM.DEFAULT_FX, JSON.parse(JSON.stringify(p.fx || {})));
+    if (!st.fxLock)
+      st.fx = Object.assign({}, LUM.DEFAULT_FX, JSON.parse(JSON.stringify(p.fx || {})));
     st.pal = Object.assign({ id: 'neon', shift: 0, cycle: 0, custom: st.pal.custom }, p.pal || {});
     if (p.aud) st.aud = Object.assign({}, st.aud, p.aud);
     if (p.layout && LUM.layoutModeById[p.layout.mode]) {
@@ -128,6 +131,14 @@
     st.params[st.scene] = P;
     st.pal.id = LUM.palettes[Math.floor(Math.random() * LUM.palettes.length)].id;
     st.pal.cycle = Math.random() < 0.45 ? Math.random() * 0.025 : 0;
+    if (st.fxLock) {
+      st.presetName = 'Random ✦';
+      fadeKick();
+      LUM.persist();
+      LUM.ui.refresh();
+      LUM.ui.toast((full ? 'Random: ' + sc.name : 'Randomized ' + sc.name) + ' (FX locked)');
+      return;
+    }
     st.fx = JSON.parse(JSON.stringify(LUM.DEFAULT_FX));
     const fx = st.fx;
     fx.trail = Math.pow(Math.random(), 0.8) * 0.85;
@@ -172,10 +183,10 @@
   };
   LUM.onFullscreenState = function (on) {
     isFs = on;
-    document.body.classList.toggle('focus', on);
+    if (LUM.ui && LUM.ui.setFullscreenUi) LUM.ui.setFullscreenUi(on);
   };
   document.addEventListener('fullscreenchange', () => {
-    if (!LUM.bridge.plugin) document.body.classList.toggle('focus', !!document.fullscreenElement);
+    if (!LUM.bridge.plugin) LUM.onFullscreenState(!!document.fullscreenElement);
   });
 
   /* ---------- fade (scene transitions) ---------- */
@@ -271,7 +282,7 @@
     qaTimer += dt;
     if (qaTimer < 0.5) return;
     qaTimer = 0;
-    qaHud.textContent = 'v20 scene:' + LUM.state.scene +
+    qaHud.textContent = 'v21 scene:' + LUM.state.scene +
       ' fps:' + Math.round(fpsAvg) +
       ' err:' + LUM.shaderErrors.length +
       ' beat:' + LUM.audio.beatCount +
