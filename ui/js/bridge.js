@@ -28,6 +28,13 @@
     be.addEventListener('importedPreset', d => {
       if (LUM.ui && LUM.ui.onImportedPreset) LUM.ui.onImportedPreset(d && d.json);
     });
+    be.addEventListener('fullscreenState', d => {
+      if (LUM.onFullscreenState) LUM.onFullscreenState(!!(d && d.on));
+    });
+    be.addEventListener('mediaInfo', d => {
+      if (d && d.url) LUM.media.load(d.url, d.ext, d.name);
+      else LUM.media.clear();
+    });
   } else {
     LUM.emit = function () {};
   }
