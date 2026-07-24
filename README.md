@@ -1,7 +1,7 @@
 # LUMINA — Audio Visualizer Plugin (VST3 + Standalone, Windows)
 
 Lumina is a real-time audio visualizer plugin for Ableton Live (and any VST3 host).
-It renders **20 unique GPU-shader scenes** driven by a live FFT/beat analysis of the
+It renders **27 unique GPU-shader scenes** driven by a live FFT/beat analysis of the
 track it sits on — spectrum sculptures, oscilloscope art, raymarched fractals,
 GPU particles, fluid dyes, reaction–diffusion, cymatics, retrowave landscapes and more —
 through a **full post-FX chain** (bloom, motion trails, kaleidoscope, chromatic aberration,
@@ -10,12 +10,14 @@ auto-hiding, resizable UI.
 
 ## Features
 
-- **20 scenes** in 5 packs:
+- **27 scenes** in 7 packs:
   - *Spectrum*: Spectra Bars · Orbital Rings · Waterfall (linear/circular) · Terrain Flight
   - *Waves*: Scope Suite (line / Lissajous XY / radial) · Waveform Tunnel · Harmonograph · Cymatics
   - *Fractal*: Julia Drift · Fractal Temple (raymarched Menger/Mandelbulb) · Warp Core (Milkdrop-style feedback) · Mandala
   - *Motion*: Particle Nebula (up to 65k GPU particles) · Ink Flow · Hyperdrive · Metaballs
   - *Texture*: Voronoi Bloom · Reaction Bloom (Gray–Scott) · Plasma · Retrowave
+  - *Minimal*: Linescape (Unknown-Pleasures ridge lines) · Dot Matrix · Ring Sequencer · Ribbon Field
+  - *Meters*: VU Needle · Level Meters · Readout HUD (seven-segment dB + BPM)
 - **Every scene has its own parameters** (5–8 each), all editable live.
 - **Global FX chain**: motion trails with zoom/spin/hue echo, dual-level bloom,
   chromatic aberration, vignette, film grain, scanlines, pixelate,
@@ -31,8 +33,24 @@ auto-hiding, resizable UI.
   posterize + dither.
 - **Pro color tools (v1.1)**: Exposure (EV), Temperature/Tint, parametric curves
   (blacks/shadows/highlights/whites + S-curve).
-- **53 factory presets**, user presets (stored globally, shared across projects),
-  preset import/export as files or clipboard JSON.
+- **Multi-pane layouts (v2.0)**: Single, Split V/H, Triple, Quad and a 6-pane Strip — run
+  different scenes side by side (spectrogram + VU + meters + scope...), adjustable splits and gap,
+  click a pane to edit it. Layout presets included (Meter Strip, Control Room, Analog Console).
+- **True fullscreen (v2.0)**: F opens a borderless fullscreen window on your monitor
+  (no host title bar); Esc returns to the plugin window.
+- **Look modules (v2.0)**: Threshold (level/softness/invert — thin-line and cutout looks),
+  Monochrome with tint color, Noise Overlay with blend modes (overlay, screen, color dodge,
+  multiply, soft light) and audio reactivity, texture overlays (paper, halftone, hatching).
+- **Media Layer (v2.0)**: load your own image, GIF or video — fit/fill/tile, blend modes,
+  opacity and beat-reactive motion; files persist with your project.
+- **FX presets (v2.0)**: one-click FX chains (Clean, VHS Camcorder, Film, Cyber Glitch,
+  Thin Lines, Halftone Print, Overdrive...) plus your own.
+- **Pro editors (v2.0)**: real interactive luminance curve editor (LUT-based), audio response
+  curve editor, custom in-app color picker (with screen eyedropper), middle-click any slider to reset.
+- **Themeable UI (v2.0)**: flat minimal design, Black OLED / Dark (#0c0c0c) / Light themes,
+  edit any UI color and save/share your own themes; UI scale, panel blur and opacity controls.
+- **67 factory presets**, user presets (stored globally, shared across projects),
+  preset import/export as files or clipboard JSON, plus full-setup export (everything in one file).
 - **Randomizer** (R), **shuffle mode** (auto-morphs the look every 32 beats),
   **focus mode** (F — pure visuals, UI hidden), auto-hiding UI, resizable window.
 - **Per-instance state** is saved inside your Ableton project.
@@ -59,7 +77,7 @@ auto-hiding, resizable UI.
 
 | Key | Action |
 |-----|--------|
-| `F` / double-click | Focus mode (pure visuals) |
+| `F` / double-click | Fullscreen (borderless, no title bar) |
 | `Esc` | Exit focus / close dialog |
 | `R` / `Shift+R` | Randomize look / randomize scene too |
 | `S` | Shuffle presets on beat |
