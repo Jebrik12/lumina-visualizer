@@ -238,7 +238,7 @@
         uModeW: P.mode, uInject: P.inject
       });
       LUM.fsq();
-      LUM.bindRT(LUM.post.sceneRT);
+      LUM.bindRT(LUM.renderRT || LUM.post.sceneRT);
       this.blitPrg.use();
       this.blitPrg.setAll({ uSrc: this.pp.a.tex, uRes: [F.w, F.h] });
       LUM.fsq();
