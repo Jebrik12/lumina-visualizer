@@ -51,6 +51,7 @@ void LuminaAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     juce::ValueTree tree ("LuminaState");
     tree.setProperty ("ui", getUiState(), nullptr);
+    tree.setProperty ("media", getMediaPath(), nullptr);
     tree.setProperty ("w", editorW.load(), nullptr);
     tree.setProperty ("h", editorH.load(), nullptr);
 
@@ -66,6 +67,7 @@ void LuminaAudioProcessor::setStateInformation (const void* data, int sizeInByte
         if (tree.hasType ("LuminaState"))
         {
             setUiState (tree.getProperty ("ui", "").toString());
+            setMediaPath (tree.getProperty ("media", "").toString());
             editorW = (int) tree.getProperty ("w", 1100);
             editorH = (int) tree.getProperty ("h", 700);
 
