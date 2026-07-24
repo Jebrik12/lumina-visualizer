@@ -45,6 +45,7 @@
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       saveTimer = null;
+      if (LUM.pushHistory) LUM.pushHistory();
       const json = JSON.stringify(LUM.serialize());
       if (hasJuce) LUM.emit('saveState', { json });
       else { try { localStorage.setItem('lumina.state', json); } catch (e) {} }
