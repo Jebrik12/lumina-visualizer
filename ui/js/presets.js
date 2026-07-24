@@ -29,8 +29,21 @@
     sens: 0, attack: 10, release: 260, tilt: 3,
     agc: true, agcAmt: 0.75, beat: 0.5, gate: 0.04,
     react: 1, floor: 0, curve: 1, dyn: 0,
-    respPts: null, respLut: null
+    respPts: null, respLut: null,
+    bassG: 1, midG: 1, trebG: 1
   };
+
+  /* ---- Audio response presets (aud-only) ---- */
+  LUM.factoryAudPresets = [
+    { name: 'Default', aud: {} },
+    { name: 'Punchy Kicks', aud: { attack: 4, release: 200, floor: 0.14, curve: 1.5, dyn: 0.55, beat: 0.65, bassG: 1.45, trebG: 0.85 } },
+    { name: 'Snappy EDM', aud: { attack: 3, release: 150, floor: 0.1, curve: 1.3, dyn: 0.4, beat: 0.7 } },
+    { name: 'Smooth Ambient', aud: { attack: 32, release: 620, curve: 0.75, dyn: 0, react: 0.9, beat: 0.35 } },
+    { name: 'Bass Focus', aud: { bassG: 1.6, midG: 0.8, trebG: 0.6, floor: 0.08, curve: 1.2 } },
+    { name: 'Treble Sparkle', aud: { trebG: 1.55, bassG: 0.8, curve: 0.9 } },
+    { name: 'Calm Until Loud', aud: { floor: 0.26, curve: 1.6, dyn: 0.8 } },
+    { name: 'Hyper Reactive', aud: { react: 1.5, attack: 2, release: 120, curve: 1.1, dyn: 0.25, beat: 0.8 } }
+  ];
 
   /* ---- FX chain presets (fx-only) ---- */
   LUM.factoryFxPresets = [
@@ -47,7 +60,8 @@
   ];
   LUM.DEFAULT_UI = {
     quality: 'auto', autohide: true, showFps: true, shuffle: false, shuffleBeats: 32,
-    theme: 'dark', themeVars: null, accent: '#5b8cff', scale: 1, blur: false, panelAlpha: 0.92
+    theme: 'dark', themeVars: null, accent: '#5b8cff', scale: 1, blur: false, panelAlpha: 0.92,
+    hideHostBar: true
   };
 
   /* Each preset: name, scene, p (scene params), fx (partial), pal {id, shift?, cycle?, custom?} */
