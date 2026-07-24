@@ -21,6 +21,10 @@ private:
     void timerCallback() override;
     void sendInit();
     void setNativeFullscreen (bool shouldBeFullscreen);
+    void setHostBarHidden (bool shouldHide);
+    void applyHostWindowStyle();
+    void dragHostWindow (int dx, int dy);
+    void closeHostWindow();
     void sendMediaInfo();
 
     std::optional<juce::WebBrowserComponent::Resource> getResource (const juce::String& url);
@@ -44,10 +48,12 @@ private:
 
     juce::WebBrowserComponent webView;
 
-    /* fullscreen via host-window style strip (Windows) */
+    /* host-window styling (Windows): fullscreen + optional title-bar removal */
     bool fsActive = false;
+    bool barHidden = false;
+    bool styleCaptured = false;
     int fsPrevW = 1100, fsPrevH = 700;
-    juce::int64 fsPrevStyle = 0, fsPrevExStyle = 0;
+    juce::int64 hostStyleOriginal = 0, hostExStyleOriginal = 0;
     int fsPrevRect[4] = { 0, 0, 0, 0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LuminaAudioProcessorEditor)
