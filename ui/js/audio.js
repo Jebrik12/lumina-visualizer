@@ -114,11 +114,20 @@
       this._dynEnv += (1 - Math.exp(-dt / 0.45)) * (this._energyR - this._dynEnv);
       const dynGain = dyn > 0 ? Math.pow(Math.min(1, this._dynEnv / 0.3), dyn * 2.2) : 1;
       const den = 1 / Math.max(0.05, 1 - floorV);
+      const lut = aud.respLut && aud.respLut.length >= 8 ? aud.respLut : null;
       const shape = v => {
         v = (v - floorV) * den;
         if (v <= 0) return 0;
-        v = Math.pow(v, curveV) * react * dynGain;
-        return v > 1 ? 1 : v;
+        if (v > 1) v = 1;
+        if (lut) {
+          const x = v * (lut.length - 1);
+          const i0 = Math.min(lut.length - 2, x | 0);
+          v = lut[i0] + (lut[i0 + 1] - lut[i0]) * (x - i0);
+        } else {
+          v = Math.pow(v, curveV);
+        }
+        v = v * react * dynGain;
+        return v > 1 ? 1 : v < 0 ? 0 : v;
       };
       for (let i = 0; i < NB; i++) this.view[i] = shape(this.sm[i]);
       this.bass = shape(this._bassR);
